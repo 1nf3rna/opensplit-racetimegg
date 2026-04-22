@@ -1,4 +1,4 @@
-module opensplit-racetime
+module opensplit-racetimegg
 
 go 1.25.0
 
@@ -36,4 +36,4 @@ require (
 	golang.org/x/text v0.22.0 // indirect
 )
 
-// replace github.com/wailsapp/wails/v2 v2.12.0 => C:\Users\dok21003\go\pkg\mod
+// replace github.com/wailsapp/wails/v2 v2.12.0 => /mnt/data/Projects/opensplit-racetimegg
