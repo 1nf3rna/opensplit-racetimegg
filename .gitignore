@@ -31,4 +31,8 @@ go.work.sum
 # .idea/
 .vscode/
 
+# Ignoring generated stuff
+frontend/node_modules/
 build/
+frontend/dist/
+frontend/wailsjs/
