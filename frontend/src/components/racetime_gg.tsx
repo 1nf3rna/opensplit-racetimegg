@@ -1,5 +1,7 @@
-import { Authorize, GetAccessToken, CheckTokens, GenTokens } from "../../wailsjs/go/racetime/WebRace";
+import { useState } from 'react'
+
 import ButtonList, { ButtonData } from "./ButtonList"
+import { Authorize, GetAccessToken, CheckTokens, GenTokens } from "../../wailsjs/go/main/App";
 
 const restUrl = "http://localhost:8000"
 const socketUrl = "ws://localhost:9999"
@@ -8,6 +10,7 @@ const socketUrl = "ws://localhost:9999"
 export async function RaceList() {
         try {
             const response = await fetch(restUrl+"/races/data");
+            console.log(response)
             const json = await response.json();   // parse JSON
             return json
         } catch (err) {
@@ -16,7 +19,7 @@ export async function RaceList() {
 }
 
 //Race List Window
-export async function RaceListWindow(w: Window) {
+export async function RaceListWindow() {
     // Get race list also need to get the X-Date-Exact header value
     const json = await RaceList()
 
@@ -56,7 +59,7 @@ export async function RaceListWindow(w: Window) {
       data={DATA}
       onClick={(item) => {
         console.log("Clicked", item);
-        RaceWindow(w, item.URL)
+        // RaceWindow(w, item.URL)
       }}
     />
 }
@@ -644,46 +647,15 @@ export async function RaceWindow(w: Window, dataURL: string) {
 }
 
 // Authenticate and get user tokens
-export async function LoginWithOAuth(w: Window) {
+export async function LoginWithOAuth() {
     try {
-        // Gets the racetime.gg buttons
-        const loginBtn = document.getElementsByTagName("BUTTON")[3] as HTMLButtonElement
-        const raceBtn = document.getElementsByTagName("BUTTON")[4] as HTMLButtonElement
-
-        loginBtn.style.display = "none"
-        raceBtn.style.display = "block"
-
         if (await CheckTokens()) {
-            w.close
             return
         }
 
-        const AuthURL = await Authorize()
-        console.log(AuthURL)
+        await Authorize()
 
-        // Open OAuth popup window
-        // window.open(AuthURL, "RaceTime.gg OAuth", "width=800,height=700,resizable=yes");
-        w.location.href = AuthURL;
-
-        // TODO: Get this shit to work
-        // It should detect when the popup window changes due to the user clicking authorize and the code being sent back via configured redirect
-        // example redirect http://localhost:34115/?code=GDaChqJIf16CdrL8XsWJtmn3gmm64j&state=state
-        w.addEventListener("DOMContentLoaded", () => {
-            const params = new URLSearchParams(w.location.search);
-
-            if (params.has("code") && params.has("state")) {
-                console.log("Detected OAuth redirect on load");
-
-                console.log("Current URL:", w.location.href);
-
-                const accessCode = params.get("code")
-                console.log(accessCode)
-                // Process the auth code
-                const accessToken = GenTokens(accessCode!);
-                console.log(accessToken)
-                w.close
-            }
-        })
+        await GenTokens();
 
     } catch (error) {
            console.error("Error initiating OAuth:", error);
