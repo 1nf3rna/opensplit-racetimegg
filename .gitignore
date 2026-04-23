@@ -37,3 +37,4 @@ build/
 frontend/dist/
 frontend/wailsjs/
 frontend/package-lock.json
+token.enc
