@@ -649,10 +649,6 @@ export async function RaceWindow(w: Window, dataURL: string) {
 // Authenticate and get user tokens
 export async function LoginWithOAuth() {
     try {
-        if (await CheckTokens()) {
-            return
-        }
-
         await Authorize()
 
         await GenTokens();
