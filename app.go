@@ -37,26 +37,11 @@ func NewApp(RestProtocol string, WebRaceServer string, RedirectURL string) *App 
 	}
 }
 
-// // App struct
-// type App struct {
-// 	ctx context.Context
-// }
-
-// // NewApp creates a new App application struct
-// func NewApp() *App {
-// 	return &App{}
-// }
-
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
-
-// Greet returns a greeting for the given name
-// func (a *App) Greet(name string) string {
-// return fmt.Sprintf("Hello %s, It's show time!", name)
-// }
 
 // // OAUTH_REDIRECT_ADDRESS
 // 127.0.0.1
@@ -112,27 +97,16 @@ func (a *App) Authorize() {
 func (a *App) GenTokens() {
 	ctx := context.Background()
 
-	// fmt.Printf("Got here\n")
-
-	// fmt.Printf(a.authCode + "\n")
-
-	// fmt.Printf("Got here\n")
-
 	if len(a.authCode) == 0 {
 		return
 	}
 
-	// fmt.Printf("Got here")
-
 	tok, err := a.conf.Exchange(ctx, a.authCode, oauth2.VerifierOption(a.verifier))
-
-	// fmt.Printf("Got here")
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// fmt.Printf("Got here")
 	a.Token = tok
 
 	// TODO: STORE THESE BETTER
@@ -140,9 +114,6 @@ func (a *App) GenTokens() {
 	fmt.Printf("Refresh token: %s\n", a.Token.RefreshToken)
 	fmt.Printf("Access token expires: %s\n", a.Token.Expiry)
 	fmt.Printf("Access token expires: %v\n", a.Token.ExpiresIn)
-
-	// fmt.Printf("Got here")
-	// return a.Token.AccessToken, a.Token.RefreshToken
 }
 
 // Can only be done if the user is logged in. Refreshes tokens that needs to be stored.
