@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"opensplit-racetimegg/securestore"
 	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -12,12 +13,13 @@ import (
 )
 
 type App struct {
-	Token     *oauth2.Token
-	verifier  string
-	conf      *oauth2.Config
-	ctx       context.Context
-	authMutex sync.Mutex
-	authCode  string
+	Token         *oauth2.Token
+	verifier      string
+	conf          *oauth2.Config
+	ctx           context.Context
+	authMutex     sync.Mutex
+	authCode      string
+	encryptionKey []byte
 	// codeChan  chan string
 }
 
@@ -91,6 +93,7 @@ func (a *App) Authorize() {
 }
 
 // Requests tokens from authorization code
+// Access tokens expire after 10 hours
 // Can only be done if the user is authorized. Creates access and refresh tokens that needs to be stored. Expires eventually and needs to be refreshed with the refresh token.
 // Example response should include: access_token, refresh_token, token_type, expires_in, scope
 // func (a *App) GenTokens() (accessToken string, refreshToken string) {
@@ -109,11 +112,14 @@ func (a *App) GenTokens() {
 
 	a.Token = tok
 
-	// TODO: STORE THESE BETTER
+	// TODO: Remove debug statements
 	fmt.Printf("Access token: %s\n", a.Token.AccessToken)
 	fmt.Printf("Refresh token: %s\n", a.Token.RefreshToken)
+	fmt.Printf("Token type: %s\n", a.Token.TokenType)
 	fmt.Printf("Access token expires: %s\n", a.Token.Expiry)
 	fmt.Printf("Access token expires: %v\n", a.Token.ExpiresIn)
+
+	securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
 }
 
 // Can only be done if the user is logged in. Refreshes tokens that needs to be stored.
@@ -125,10 +131,14 @@ func (a *App) RefreshTokens() {
 	// no token, auth revoked
 	a.conf.TokenSource(ctx, a.Token)
 
+	// TODO: Remove debug statements
 	fmt.Printf("Access token: %s\n", a.Token.AccessToken)
 	fmt.Printf("Refresh token: %s\n", a.Token.RefreshToken)
+	fmt.Printf("Token type: %s\n", a.Token.TokenType)
 	fmt.Printf("Access token expires: %s\n", a.Token.Expiry)
 	fmt.Printf("Access token expires: %v\n", a.Token.ExpiresIn)
+
+	securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
 }
 
 func (a *App) CheckTokens() bool {
