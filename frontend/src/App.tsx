@@ -43,16 +43,6 @@ function App() {
                 >
                     Racetime.gg Auth
                 </button>
-
-                {/* <button
-                hidden
-                onClick={async () => {
-                    // TODO: Get this shit to work
-                    await RaceListWindow();
-                }}
-            >
-                Racetime.gg Races
-            </button> */}
             </div>
         )
     }
