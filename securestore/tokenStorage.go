@@ -14,7 +14,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-func Encrypt(data []byte, key []byte) (string, error) {
+func encrypt(data []byte, key []byte) (string, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
@@ -34,7 +34,7 @@ func Encrypt(data []byte, key []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-func Decrypt(enc string, key []byte) ([]byte, error) {
+func decrypt(enc string, key []byte) ([]byte, error) {
 	data, err := base64.StdEncoding.DecodeString(enc)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func SaveToken(path string, token oauth2.Token, key []byte) error {
 		return err
 	}
 
-	enc, err := Encrypt(data, key)
+	enc, err := encrypt(data, key)
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func LoadToken(path string, key []byte) (*oauth2.Token, error) {
 		return nil, err
 	}
 
-	data, err := Decrypt(string(enc), key)
+	data, err := decrypt(string(enc), key)
 	if err != nil {
 		return nil, err
 	}
