@@ -124,7 +124,7 @@ func (a *App) GenTokens() {
 
 // Can only be done if the user is logged in. Refreshes tokens that needs to be stored.
 // Example response should include: access_token, refresh_token, token_type, expires_in, scope
-func (a *App) RefreshTokens() {
+func (a *App) refreshTokens() {
 	ctx := context.Background()
 
 	// TODO: catch errors
@@ -141,21 +141,21 @@ func (a *App) RefreshTokens() {
 	securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
 }
 
-func (a *App) CheckTokens() bool {
+func (a *App) CheckTokens() (accessToken string) {
 	if a.Token == nil || (a.Token.RefreshToken == "" && a.Token.AccessToken == "") {
-		return false
+		return ""
 	}
 	if !a.Token.Valid() {
 		if a.Token.RefreshToken != "" {
-			a.RefreshTokens()
-			return true
+			a.refreshTokens()
+			return a.getAccessToken()
 		} else {
-			return false
+			return ""
 		}
 	}
-	return true
+	return a.getAccessToken()
 }
 
-func (a *App) GetAccessToken() (accessToken string) {
+func (a *App) getAccessToken() (accessToken string) {
 	return a.Token.AccessToken
 }
