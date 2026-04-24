@@ -1,68 +1,68 @@
 import { useState } from 'react'
 
 import ButtonList, { ButtonData } from "./ButtonList"
-import { Authorize, GetAccessToken, CheckTokens, GenTokens } from "../../wailsjs/go/main/App";
+import { Authorize, GenTokens } from "../../wailsjs/go/main/App";
 
 const restUrl = "http://localhost:8000"
 const socketUrl = "ws://localhost:9999"
 
 // Get list of races to be displayed
 export async function RaceList() {
-        try {
-            const response = await fetch(restUrl+"/races/data");
-            console.log(response)
-            const json = await response.json();   // parse JSON
-            return json
-        } catch (err) {
-            console.error(err);
-        }
+    try {
+        const response = await fetch(restUrl + "/races/data");
+        console.log(response)
+        const json = await response.json();   // parse JSON
+        return json
+    } catch (err) {
+        console.error(err);
+    }
 }
 
 //Race List Window
-export async function RaceListWindow() {
-    // Get race list also need to get the X-Date-Exact header value
-    const json = await RaceList()
+// export async function RaceListWindow(raceList: Map) {
+//     // Get race list also need to get the X-Date-Exact header value
+//     // const json = await RaceList()
 
-    // Populate buttons with races
-    const DATA: ButtonData[] = [
-    ];
+//     // Populate buttons with races
+//     const DATA: ButtonData[] = [
+//     ];
 
-    for (let index = 0; index < json.races.length; index++) {
-        const categoryName = json.races[index].category.name;
-        const URL = json.races[index].url;
-        const entrantCount = json.races[index].entrants_count;
-        const entrantFinishedCount = json.races[index].entrants_count_finished;
-        const goal = json.races[index].goal.name;
-        const status = json.races[index].status.value;
-        // time stamp format 2025-12-06T08:18:13.788Z
-        const startedAt = json.races[index].started_at;
-        console.log(categoryName);
-        console.log(URL);
-        console.log(entrantCount);
-        console.log(entrantFinishedCount);
-        console.log(goal);
-        console.log(status);
-        console.log(startedAt);
+//     for (let index = 0; index < json.races.length; index++) {
+//         const categoryName = json.races[index].category.name;
+//         const URL = json.races[index].url;
+//         const entrantCount = json.races[index].entrants_count;
+//         const entrantFinishedCount = json.races[index].entrants_count_finished;
+//         const goal = json.races[index].goal.name;
+//         const status = json.races[index].status.value;
+//         // time stamp format 2025-12-06T08:18:13.788Z
+//         const startedAt = json.races[index].started_at;
+//         console.log(categoryName);
+//         console.log(URL);
+//         console.log(entrantCount);
+//         console.log(entrantFinishedCount);
+//         console.log(goal);
+//         console.log(status);
+//         console.log(startedAt);
 
-        // TODO: this should be saved from the racelist call
-        const x_date_exact_header: Date = new Date("2025-12-06T23:01:07Z");
-        var elapsedTime: Date = new Date(x_date_exact_header.getTime() - startedAt.getTime())
-        var runTime = status == 'in_progress' ? elapsedTime : "0"
-        DATA.push({
-            id: index.toString(),
-            URL: URL,
-            label: "[" + runTime + "] " + categoryName + " - " + goal + " (" + entrantFinishedCount + "/" + entrantCount + " Finished)"
-        });
-    }
+//         // TODO: this should be saved from the racelist call
+//         const x_date_exact_header: Date = new Date("2025-12-06T23:01:07Z");
+//         var elapsedTime: Date = new Date(x_date_exact_header.getTime() - startedAt.getTime())
+//         var runTime = status == 'in_progress' ? elapsedTime : "0"
+//         DATA.push({
+//             id: index.toString(),
+//             URL: URL,
+//             label: "[" + runTime + "] " + categoryName + " - " + goal + " (" + entrantFinishedCount + "/" + entrantCount + " Finished)"
+//         });
+//     }
 
-    <ButtonList
-      data={DATA}
-      onClick={(item) => {
-        console.log("Clicked", item);
-        // RaceWindow(w, item.URL)
-      }}
-    />
-}
+//     <ButtonList
+//       data={DATA}
+//       onClick={(item) => {
+//         console.log("Clicked", item);
+//         // RaceWindow(w, item.URL)
+//       }}
+//     />
+// }
 
 export type messageData = {
     message: string;
@@ -73,7 +73,7 @@ export type messageData = {
 };
 
 //Race Window
-export async function RaceWindow(w: Window, dataURL: string) {
+export async function RaceWindow(w: Window, dataURL: string, accessToken: string) {
     // variables
     var goal
     var info
@@ -84,18 +84,18 @@ export async function RaceWindow(w: Window, dataURL: string) {
     var forfeit = false
     var done = false
     // const tempURL = dataURL.split("/")
-    const authenticatedRaceURL = "/ws/o/race/"+dataURL.split("/")[1]
-    const accessToken = await GetAccessToken()
+    const authenticatedRaceURL = "/ws/o/race/" + dataURL.split("/")[1]
+    // const accessToken = await GetAccessToken()
 
 
     // open websocket for selected race
     // websocket_oauth_url used for authenticated chat messages and real-time updates
     // Example socket url "websocket_oauth_url": "/ws/o/race/funky-link-3070"
-    const ws = new WebSocket(socketUrl+authenticatedRaceURL+"?token="+accessToken);
-        
+    const ws = new WebSocket(socketUrl + authenticatedRaceURL + "?token=" + accessToken);
+
     ws.onopen = () => {
         console.log("Connected to WebSocket server");
-        
+
         // Start ping interval
         setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
@@ -121,11 +121,11 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 // }
                 if (paragraph) {
                     for (let index = 0; index < event.data.messages.length; index++) {
-                        paragraph.textContent += event.data.messages[index]                        
+                        paragraph.textContent += event.data.messages[index]
                     }
                 }
                 break;
-            
+
             case "chat.message":
                 // {
                 //   "type": "chat.message",
@@ -203,11 +203,11 @@ export async function RaceWindow(w: Window, dataURL: string) {
 
             case "chat.purge":
                 // {
-                    // "type": "chat.purge",
-                    // "purge": {
-                        // "user": { <user info object> },
-                        // "purged_by": { <user info object> }
-                    // }
+                // "type": "chat.purge",
+                // "purge": {
+                // "user": { <user info object> },
+                // "purged_by": { <user info object> }
+                // }
                 // }
                 break
 
@@ -215,8 +215,8 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 // {
                 //   "type": "error",
                 //   "errors": [
-                    // "Permission denied, you may need to re-authorise this application.",
-                    // "..."
+                // "Permission denied, you may need to re-authorise this application.",
+                // "..."
                 //   ]
                 // }
                 console.log(event.data.errors)
@@ -233,7 +233,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 // {
                 //   "type": "race.data",
                 //   "race": {
-                    // ...
+                // ...
                 //   }
                 // }
                 goal = event.data.race.goal.name
@@ -241,11 +241,11 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 entrants = event.data.race.entrants
                 category = event.data.race.category.name
                 raceID = event.data.race.slug
-                
+
                 const enter = w.document.getElementById('enterRaceButton') as HTMLButtonElement
                 const finish = w.document.getElementById('finishButton') as HTMLButtonElement
                 const forfeit = w.document.getElementById('forfeitButton') as HTMLButtonElement
-                
+
                 // type RaceState
                 // invitational
                 // pending
@@ -262,7 +262,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                         finishButton.disabled = true
                         forfeitButton.hidden = true
                         forfeitButton.disabled = true
-                    break
+                        break
 
                     case "in_progress":
                         enterRaceButton.hidden = true
@@ -271,9 +271,9 @@ export async function RaceWindow(w: Window, dataURL: string) {
                         finishButton.disabled = false
                         forfeitButton.hidden = false
                         forfeitButton.disabled = false
-                    break
+                        break
 
-                    case  "finished":
+                    case "finished":
                     case "cancelled":
                         enterRaceButton.hidden = true
                         enterRaceButton.disabled = true
@@ -281,7 +281,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                         finishButton.disabled = true
                         forfeitButton.hidden = true
                         forfeitButton.disabled = true
-                    break
+                        break
                 }
 
                 // update entrants list
@@ -304,7 +304,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
 
     // clear window contents
     w.document.body.innerHTML = "";
-    
+
     // title format
     // {goal} [{category}] - {URL}
     w.document.title = goal + " [" + category + "] - " + raceID
@@ -341,10 +341,10 @@ export async function RaceWindow(w: Window, dataURL: string) {
     const entrantList: HTMLUListElement = document.createElement('ul');
     for (let index = 0; index < entrants.length; index++) {
         const element = entrants[index].name;
-        
+
         const listItem: HTMLLIElement = document.createElement('li');
         listItem.textContent = element;
-        entrantList.appendChild(listItem);        
+        entrantList.appendChild(listItem);
     }
 
     w.document.body.appendChild(entrantList);
@@ -373,7 +373,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
         if (ws.readyState === WebSocket.OPEN) {
             if (target.checked) {
                 console.log('Checkbox is checked')
-                
+
                 // TODO: hide entrants
             } else {
                 console.log('Checkbox is unchecked')
@@ -419,11 +419,11 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 //         "guid": "<random string>"
                 //     }
                 // }
-                
+
                 const mData: messageData = {
                     message: ".ready"
                 }
-                const ready_message: {action: string; data: messageData} = {
+                const ready_message: { action: string; data: messageData } = {
                     action: "message",
                     data: mData
                 }
@@ -445,7 +445,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 const mData: messageData = {
                     message: ".unready"
                 }
-                const ready_message: {action: string; data: messageData} = {
+                const ready_message: { action: string; data: messageData } = {
                     action: "message",
                     data: mData
                 }
@@ -488,7 +488,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 const mData: messageData = {
                     message: ".leave"
                 }
-                const ready_message: {action: string; data: messageData} = {
+                const ready_message: { action: string; data: messageData } = {
                     action: "message",
                     data: mData
                 }
@@ -499,7 +499,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 const mData: messageData = {
                     message: ".join"
                 }
-                const ready_message: {action: string; data: messageData} = {
+                const ready_message: { action: string; data: messageData } = {
                     action: "message",
                     data: mData
                 }
@@ -538,7 +538,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 const mData: messageData = {
                     message: ".undone"
                 }
-                const ready_message: {action: string; data: messageData} = {
+                const ready_message: { action: string; data: messageData } = {
                     action: "message",
                     data: mData
                 }
@@ -549,7 +549,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 const mData: messageData = {
                     message: ".done"
                 }
-                const ready_message: {action: string; data: messageData} = {
+                const ready_message: { action: string; data: messageData } = {
                     action: "message",
                     data: mData
                 }
@@ -588,7 +588,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 const mData: messageData = {
                     message: ".unforfeit"
                 }
-                const ready_message: {action: string; data: messageData} = {
+                const ready_message: { action: string; data: messageData } = {
                     action: "message",
                     data: mData
                 }
@@ -599,7 +599,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
                 const mData: messageData = {
                     message: ".forfeit"
                 }
-                const ready_message: {action: string; data: messageData} = {
+                const ready_message: { action: string; data: messageData } = {
                     action: "message",
                     data: mData
                 }
@@ -624,7 +624,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
             const mData: messageData = {
                 message: enteredText
             }
-            const message: {action: string; data: messageData} = {
+            const message: { action: string; data: messageData } = {
                 action: "message",
                 data: mData
             }
@@ -633,7 +633,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
             console.warn("WebSocket is not open, message not sent.");
         }
     });
-    
+
     // Create a container for better styling/layout
     const container = w.document.createElement('div');
     container.appendChild(hideResultsCheckBox);
@@ -642,7 +642,7 @@ export async function RaceWindow(w: Window, dataURL: string) {
     container.appendChild(readyCheckBox);
     container.appendChild(readyLabel);
     container.appendChild(enterRaceButton);
-    
+
     w.document.body.appendChild(textInput)
 }
 
@@ -654,6 +654,6 @@ export async function LoginWithOAuth() {
         await GenTokens();
 
     } catch (error) {
-           console.error("Error initiating OAuth:", error);
+        console.error("Error initiating OAuth:", error);
     }
 }
