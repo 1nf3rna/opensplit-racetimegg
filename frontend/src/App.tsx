@@ -13,24 +13,33 @@ function App() {
     // Gets tokens from backend
     useEffect(() => {
         // call backend function to get token
-        async () => {
-            const raceToken = await racetime.CheckTokens()
-            setToken(raceToken)
-        }
+        (
+            async () => {
+                const raceToken = await racetime.CheckTokens()
+                setToken(raceToken)
+            }
+        )()
     }, [])
 
     // Gets list of races
     useEffect(() => {
         if (token == "") {
+            console.log("token is blank\n")
             return
         }
 
-        (
-            async () => {
-                const raceObj = await RaceList()
-                setRaceList(raceObj["races"])
-            }
-        )()
+        const fetchRaces = async () => {
+            const raceObj = await RaceList()
+            setRaceList(raceObj["races"])
+        }
+
+        fetchRaces()
+
+        const intervalId = setInterval(() => {
+            fetchRaces()
+        }, 5000)
+
+        return () => clearInterval(intervalId)
     }, [token])
 
     // Gets selected race
@@ -47,7 +56,7 @@ function App() {
     //     )()
     // }, [])
 
-    WindowSetSize(320, 580);
+    WindowSetSize(320, 580)
     if (token == "") {
         // no token
         // show login button
@@ -55,7 +64,9 @@ function App() {
             <div id="App">
                 <button
                     onClick={async () => {
-                        await LoginWithOAuth();
+                        await LoginWithOAuth()
+                        // This just triggers the useeffects functions
+                        setToken("get tokens")
                     }}
                 >
                     Racetime.gg Auth
