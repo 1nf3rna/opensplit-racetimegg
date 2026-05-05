@@ -145,6 +145,7 @@ func (a *App) CheckTokens() (accessToken string) {
 	if a.Token == nil || (a.Token.RefreshToken == "" && a.Token.AccessToken == "") {
 		return ""
 	}
+
 	if !a.Token.Valid() {
 		if a.Token.RefreshToken != "" {
 			a.refreshTokens()
@@ -153,6 +154,7 @@ func (a *App) CheckTokens() (accessToken string) {
 			return ""
 		}
 	}
+
 	return a.getAccessToken()
 }
 
