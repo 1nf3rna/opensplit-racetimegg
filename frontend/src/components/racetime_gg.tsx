@@ -12,57 +12,45 @@ export async function RaceList() {
         const response = await fetch(restUrl + "/races/data");
         console.log(response)
         const json = await response.json();   // parse JSON
-        return json
+        
+        // Populate buttons with races
+        const DATA: ButtonData[] = [
+        ];
+
+        for (let index = 0; index < json.races.length; index++) {
+            const categoryName = json.races[index].category.name;
+            const URL = json.races[index].url;
+            const entrantCount = json.races[index].entrants_count;
+            const entrantFinishedCount = json.races[index].entrants_count_finished;
+            const goal = json.races[index].goal.name;
+            const status = json.races[index].status.value;
+            // time stamp format 2025-12-06T08:18:13.788Z
+            const startedAt = json.races[index].started_at;
+            console.log(categoryName);
+            console.log(URL);
+            console.log(entrantCount);
+            console.log(entrantFinishedCount);
+            console.log(goal);
+            console.log(status);
+            console.log(startedAt);
+
+            // TODO: this should be saved from the racelist call
+            const x_date_exact_header: Date = new Date("2025-12-06T23:01:07Z");
+            // var elapsedTime: Date = new Date(x_date_exact_header.getTime() - startedAt.getTime())
+            var elapsedTime: Date = new Date(0)
+            var runTime = status == 'in_progress' ? elapsedTime : "0"
+            DATA.push({
+                id: index.toString(),
+                URL: URL,
+                label: "[" + runTime + "] " + categoryName + " - " + goal + " (" + entrantFinishedCount + "/" + entrantCount + " Finished)"
+            });
+        }
+
+        return DATA
     } catch (err) {
         console.error(err);
     }
 }
-
-//Race List Window
-// export async function RaceListWindow(raceList: Map) {
-//     // Get race list also need to get the X-Date-Exact header value
-//     // const json = await RaceList()
-
-//     // Populate buttons with races
-//     const DATA: ButtonData[] = [
-//     ];
-
-//     for (let index = 0; index < json.races.length; index++) {
-//         const categoryName = json.races[index].category.name;
-//         const URL = json.races[index].url;
-//         const entrantCount = json.races[index].entrants_count;
-//         const entrantFinishedCount = json.races[index].entrants_count_finished;
-//         const goal = json.races[index].goal.name;
-//         const status = json.races[index].status.value;
-//         // time stamp format 2025-12-06T08:18:13.788Z
-//         const startedAt = json.races[index].started_at;
-//         console.log(categoryName);
-//         console.log(URL);
-//         console.log(entrantCount);
-//         console.log(entrantFinishedCount);
-//         console.log(goal);
-//         console.log(status);
-//         console.log(startedAt);
-
-//         // TODO: this should be saved from the racelist call
-//         const x_date_exact_header: Date = new Date("2025-12-06T23:01:07Z");
-//         var elapsedTime: Date = new Date(x_date_exact_header.getTime() - startedAt.getTime())
-//         var runTime = status == 'in_progress' ? elapsedTime : "0"
-//         DATA.push({
-//             id: index.toString(),
-//             URL: URL,
-//             label: "[" + runTime + "] " + categoryName + " - " + goal + " (" + entrantFinishedCount + "/" + entrantCount + " Finished)"
-//         });
-//     }
-
-//     <ButtonList
-//       data={DATA}
-//       onClick={(item) => {
-//         console.log("Clicked", item);
-//         // RaceWindow(w, item.URL)
-//       }}
-//     />
-// }
 
 export type messageData = {
     message: string;
@@ -85,7 +73,6 @@ export async function RaceWindow(w: Window, dataURL: string, accessToken: string
     var done = false
     // const tempURL = dataURL.split("/")
     const authenticatedRaceURL = "/ws/o/race/" + dataURL.split("/")[1]
-    // const accessToken = await GetAccessToken()
 
 
     // open websocket for selected race
