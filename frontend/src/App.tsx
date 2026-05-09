@@ -3,8 +3,69 @@ import logo from './assets/images/logo-universal.png';
 import './App.css';
 import * as racetime from "../wailsjs/go/main/App";
 import { LoginWithOAuth, RaceList } from './components/racetime_gg';
-import { WindowSetSize } from "../wailsjs/runtime";
+import { EventsOn, WindowSetSize } from "../wailsjs/runtime";
 import ButtonList, { ButtonData } from "./components/ButtonList"
+
+type RaceInfo = {
+    Version: number
+    Goal: string
+    Game: string
+    RaceID: string
+    Info: string
+    DisplayResults: boolean
+    EntrantCount: number
+    EntrantFinishedCount: number
+    Entrants: Entrant[]
+    Text: ChatMessage[]
+}
+
+type ChatMessage = {
+    ID: string                //	    "id": "<string>",
+    User: User                //	    "user": { <user info object> },
+    Bot: string               //	    "bot": "<string>",
+    DirectTo: User           //	    "direct_to": { <user info object> },
+    PostedAt: string         //	    "posted_at": "<iso date string>"
+    Message: string           //	    "message": "<string>",
+    Message_plain: string     //	    "message_plain": "<string>",
+    Highlight: boolean        //	    "highlight": <bool>,
+    Is_dm: boolean            //	    "is_dm": <bool>,
+    Is_bot: boolean           //	    "is_bot": <bool>,
+    Is_system: boolean        //	    "is_system": <bool>,
+    Is_pinned: boolean        //	    "is_pinned": <bool>,
+    Delay: string          //	    "delay": "<iso duration string>",
+    //	    "actions" { <action objects> }
+}
+
+type User = {
+    Id: string              // "id": "fR42gLweew3pQlm4",
+    Full_name: string       // "full_name": "Mario#5527",
+    Name: string            // "name": "Mario",
+    Discriminator: string   // "discriminator": "5527",
+    Url: string             // "url": "/user/fR42gLweew3pQlm4",
+    Avatar: string          // "avatar": "/media/mario.png",
+    Pronouns: string        // "pronouns": "he/him",
+    Flair: string           // "flair": "monitor supporter",
+    Twitch_name: string     // "twitch_name": "ItsaMeMario",
+    Twitch_channel: string  // "twitch_channel": "https://www.twitch.tv/itsamemario",
+    Can_moderate: boolean  // "can_moderate": false
+}
+
+type Entrant = {
+    User: User                            // user: User data blob for this entrant.
+    UserStatus: UserStatus              // value: A machine-parsable status text.
+    VerboseValue: string          // verbose_value: A user-parsable status text, e.g. "In progress".
+    HelpText: string              // help_text: Describes the status, e.g. "Did not finish the race.".
+    FinishTime: string    // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
+    FinishedAt: string        // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
+    Place: number                           // place: Integer indicating what position the user finished in.
+    PlaceOrdinal: string                // place_ordinal: String ordinal version of place, e.g. "3rd".
+    Score: number                           // score: Integer amount of points earned by this entrant on the relevant leaderboard. Note that this is not the entrant's current score (unless the race is in progress), it is the score they had when they entered the race, not after.
+    ScoreChange: number                    // score_change Integer amount of points gained/lost as a result of this race, or null (not zero!) if race is not recorded.
+    Comment: string                      // comment: A string containing a pithy comeback supplied by the user post-race, or null if they have no comment. If hide_comments is true and the race has not concluded, this field is always null.
+    HasComment: boolean                    // has_comment: A boolean indicating if the entrant has made a comment. This field is unaffected by the hide_comments setting.
+    StreamLive: boolean                     // stream_live: Boolean indicating if the user's stream is currently live. This is updated in real-time while a race is in progress, but once an entrant has finished, forfeited or been disqualified it will not be updated.
+    StreamOverride: boolean                 // stream_override: Boolean indicating if a moderator overrode the streaming requirement for this race entrant,
+}
 
 type UserStatus =
     "ready"
@@ -32,18 +93,18 @@ function App() {
     const [doneVisible, setDoneVisible] = useState<boolean>(true);
     const [forfeitVisible, setForfeitVisible] = useState<boolean>(true);
     const [userStatus, setUserStatus] = useState<UserStatus>("not_ready");
-    const [text, setText] = useState<string>("");
-    const [goal, setGoal] = useState<string>("");
-    const [raceInfo, setRaceInfo] = useState<string>("Hello from React");
-    const [game, setGame] = useState<string>("Hello from React");
-    const [entractList, setEntrantList] = useState([]);
+    const [text, setText] = useState<ChatMessage[]>([]);
+    // const [goal, setGoal] = useState<string>("");
+    const [raceInfo, setRaceInfo] = useState<RaceInfo>();
+    // const [game, setGame] = useState<string>("Hello from React");
+    const [entrantList, setEntrantList] = useState<Entrant[]>([]);
 
-    const handleAuthClick =
-        async () => {
-            await LoginWithOAuth()
-            // This just triggers the useeffects functions
-            setToken("get tokens")
-        };
+    // const handleAuthClick =
+    //     async () => {
+    //         await LoginWithOAuth()
+    //         // This just triggers the useeffects functions
+    //         setToken("get tokens")
+    //     };
 
     const handleJoinClick =
         async () => {
@@ -80,6 +141,47 @@ function App() {
         console.log(event.target.checked);
         await racetime.HideResults(checked)
     };
+
+    // Chat updated
+    useEffect(() => {
+        const newChatText = EventsOn("chatUpdated", (chatText: ChatMessage[]) => {
+            setText(chatText)
+        })
+        return () => {
+            newChatText();
+        };
+    }, []);
+
+    // RaceInfo updated
+    useEffect(() => {
+        const newRaceState = EventsOn("raceStateUpdated", (currentRace: RaceInfo) => {
+            setRaceInfo(currentRace)
+        })
+        return () => {
+            newRaceState();
+        };
+    }, []);
+
+    // Entrants updated
+    useEffect(() => {
+        const newEntrants = EventsOn("entrantsUpdated", (entrantList: Entrant[]) => {
+            setEntrantList(entrantList)
+        })
+        return () => {
+            newEntrants();
+        };
+    }, []);
+
+    useEffect(() => {
+        setRaceInfo((prev) => {
+            if (!prev) return prev
+
+            return {
+                ...prev,
+                Entrants: entrantList,
+            }
+        })
+    }, [entrantList])
 
     // Gets tokens from backend
     useEffect(() => {
@@ -125,7 +227,12 @@ function App() {
         return (
             <div id="Auth">
                 <button
-                    onClick={() => handleAuthClick}>
+                    onClick={async () => {
+                        await LoginWithOAuth()
+                        // This just triggers the useeffects functions
+                        setToken("get tokens")
+                    }}>
+                    {/* onClick={() => handleAuthClick}> */}
                     Racetime.gg Auth
                 </button>
             </div>
@@ -151,11 +258,15 @@ function App() {
             // show race window
             return (
                 <div id="RaceWindow">
-                    <h1>{"Game: " + game}</h1>
+                    <h1>{"Game: " + raceInfo?.Game}</h1>
                     <h1>{"Race: " + race}</h1>
-                    <h1>{"Goal: " + goal}</h1>
-                    <h1>{"Info: " + raceInfo}</h1>
-                    <h1>{entractList}</h1>
+                    <h1>{"Goal: " + raceInfo?.Goal}</h1>
+                    <h1>{"Info: " + raceInfo?.Info}</h1>
+                    <div>
+                        {raceInfo?.Entrants.map((Entrant, index) => (
+                            <div key={index}>{Entrant.User.Name}</div>
+                        ))}
+                    </div>
 
                     {/* add scrolling text window */}
                     <div
@@ -167,7 +278,13 @@ function App() {
                             padding: "8px",
                             whiteSpace: "pre-wrap",
                         }}>
-                        {text}
+                        {text.map((message, index) => (
+                            <div key={index}>
+                                <div>{message.PostedAt}</div>
+                                <div>{message.User.Name}</div>
+                                <div>{message.Message}</div>
+                            </div>
+                        ))}
                     </div>
 
                     {/* add hide results check box */}
