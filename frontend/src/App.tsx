@@ -152,6 +152,17 @@ function App() {
         };
     }, []);
 
+    useEffect(() => {
+        setText((prev) => {
+            if (!prev) return prev
+
+            return {
+                ...prev,
+                Text: text,
+            }
+        })
+    }, [text])
+
     // RaceInfo updated
     useEffect(() => {
         const newRaceState = EventsOn("raceStateUpdated", (currentRace: RaceInfo) => {
@@ -278,7 +289,7 @@ function App() {
                             padding: "8px",
                             whiteSpace: "pre-wrap",
                         }}>
-                        {text.map((message, index) => (
+                        {raceInfo?.Text.map((message, index) => (
                             <div key={index}>
                                 <div>{message.PostedAt}</div>
                                 <div>{message.User.Name}</div>
