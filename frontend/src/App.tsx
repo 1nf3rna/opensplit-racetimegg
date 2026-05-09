@@ -70,13 +70,15 @@ function App() {
         };
 
     const sendToBackend = async () => {
-        await racetime.SendText(textEntry);
+        const id: string = crypto.randomUUID();
+        console.log(id);
+        await racetime.SendText(textEntry, id);
     };
 
     const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         setChecked(checked)
         console.log(event.target.checked);
-        await racetime.UpdateEntrantList(checked)
+        await racetime.HideResults(checked)
     };
 
     // Gets tokens from backend
