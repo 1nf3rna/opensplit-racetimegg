@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"opensplit-racetimegg/securestore"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const socketUrl = "ws://localhost:9999"
+const socketUrl = "ws://localhost:8000"
 
 type RaceState int
 
@@ -278,10 +279,7 @@ func (a *App) HandleChatMessage(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
 
 	a.CurrentRace.Text = append(a.CurrentRace.Text, msg)
 
@@ -307,10 +305,8 @@ func (a *App) HandleChatHistory(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
+
 	// replace race message array
 	a.CurrentRace.Text = msg.Messages
 
@@ -335,10 +331,8 @@ func (a *App) HandleChatDM(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
+
 	// handle putting DMs in correct tabs
 }
 
@@ -357,10 +351,8 @@ func (a *App) HandleChatPin(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
+
 	// handle pinning message to top of chat window
 }
 
@@ -379,10 +371,8 @@ func (a *App) HandleChatUnpin(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
+
 	// handle unpinning message from the top of chat window
 }
 
@@ -405,10 +395,7 @@ func (a *App) HandleChatDelete(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
 
 	for i, m := range a.CurrentRace.Text {
 		if m.ID == msg.ID {
@@ -439,10 +426,7 @@ func (a *App) HandleChatPurge(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
 
 	filtered := a.CurrentRace.Text[:0]
 
@@ -478,10 +462,7 @@ func (a *App) HandleChatError(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
 
 	// Do stuff depending on the errors
 }
@@ -499,10 +480,7 @@ func (a *App) HandlePong(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
 }
 
 type RaceData struct {
@@ -567,10 +545,7 @@ func (a *App) HandleRaceData(data []byte) {
 		return
 	}
 
-	fmt.Printf(
-		"[CHAT] %s: %s\n",
-		msg,
-	)
+	fmt.Printf("[CHAT] %+v\n", msg)
 
 	a.CurrentRace.Version = msg.Version
 	a.CurrentRace.Goal = msg.Goal.Name
@@ -682,23 +657,31 @@ func (a *App) ForceReload() {
 }
 
 // open websocket connection and start goroutines
-func (a *App) WebSocketConnection(raceURL string) {
+func (a *App) WebSocketConnection(raceURL string) error {
 	// should probably do this with authorization header as shown here:
 	// https://github.com/racetimeGG/racetime-app/wiki/Category-bots
 
 	// TODO: Fix raceURL
-	authenticatedRaceURL := "/ws/o/race/" + raceURL
-	a.authenticatedRaceURL = socketUrl + authenticatedRaceURL + "?token=" + a.Token.AccessToken
 
-	a.racetimeWS, _, _ = websocket.Dial(
+	a.authenticatedRaceURL = socketUrl + "/ws/o/race/" + strings.Split(raceURL, "/")[2] + "?token=" + a.Token.AccessToken
+
+	conn, _, err := websocket.Dial(
 		a.ctx,
 		a.authenticatedRaceURL,
 		nil,
 	)
 
+	if err != nil {
+		return fmt.Errorf("websocket dial failed: %w", err)
+	}
+
+	a.racetimeWS = conn
+
 	go a.pingRoutine()
 	go a.writeRoutine()
 	go a.readRoutine()
+
+	return nil
 }
 
 // Convert data to be sent to json before sending
@@ -720,6 +703,11 @@ func (a *App) Send(v any) error {
 // message writing routine
 func (a *App) writeRoutine() {
 	for {
+		if a.racetimeWS == nil {
+			log.Println("websocket connection is nil")
+			return
+		}
+
 		select {
 		case msg := <-a.writeCh:
 			writeCtx, cancel := context.WithTimeout(
@@ -752,6 +740,11 @@ func (a *App) readRoutine() {
 	// defer c.cancel()
 
 	for {
+		if a.racetimeWS == nil {
+			log.Println("websocket connection is nil")
+			return
+		}
+
 		_, data, err := a.racetimeWS.Read(a.ctx)
 		if err != nil {
 			log.Println("read error:", err)
@@ -784,6 +777,11 @@ func (a *App) pingRoutine() {
 	for {
 		select {
 		case <-ticker.C:
+			if a.racetimeWS == nil {
+				log.Println("websocket connection is nil")
+				return
+			}
+
 			// Timeout for ping response
 			pingCtx, cancel := context.WithTimeout(a.ctx, 5*time.Second)
 
