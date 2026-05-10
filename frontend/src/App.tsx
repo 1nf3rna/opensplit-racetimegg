@@ -93,7 +93,7 @@ function App() {
     const [doneVisible, setDoneVisible] = useState<boolean>(true);
     const [forfeitVisible, setForfeitVisible] = useState<boolean>(true);
     const [userStatus, setUserStatus] = useState<UserStatus>("not_ready");
-    const [text, setText] = useState<ChatMessage[]>([]);
+    // const [text, setText] = useState<ChatMessage[]>([]);
     // const [goal, setGoal] = useState<string>("");
     const [raceInfo, setRaceInfo] = useState<RaceInfo>();
     // const [game, setGame] = useState<string>("Hello from React");
@@ -137,31 +137,40 @@ function App() {
     };
 
     const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        setChecked(checked)
-        console.log(event.target.checked);
-        await racetime.HideResults(checked)
+        const value = event.target.checked;
+
+        setChecked(value);
+        await racetime.HideResults(value);
     };
 
     // Chat updated
     useEffect(() => {
         const newChatText = EventsOn("chatUpdated", (chatText: ChatMessage[]) => {
-            setText(chatText)
-        })
+            setRaceInfo((prev) => {
+                if (!prev) return prev;
+
+                return {
+                    ...prev,
+                    Text: chatText,
+                };
+            });
+        });
+
         return () => {
             newChatText();
         };
     }, []);
 
-    useEffect(() => {
-        setText((prev) => {
-            if (!prev) return prev
+    // useEffect(() => {
+    //     setText((prev) => {
+    //         if (!prev) return prev
 
-            return {
-                ...prev,
-                Text: text,
-            }
-        })
-    }, [text])
+    //         return {
+    //             ...prev,
+    //             Text: text,
+    //         }
+    //     })
+    // }, [text])
 
     // RaceInfo updated
     useEffect(() => {
@@ -231,7 +240,10 @@ function App() {
         return () => clearInterval(intervalId)
     }, [token, race])
 
-    WindowSetSize(320, 580)
+    useEffect(() => {
+        WindowSetSize(320, 580)
+    }, [])
+
     if (token == "") {
         // no token
         // show login button
@@ -256,10 +268,10 @@ function App() {
                 <div id="RaceList">
                     <ButtonList
                         data={raceList}
-                        onClick={(item) => {
+                        onClick={async (item) => {
                             console.log("Clicked", item);
                             setJoinedRace(item.URL)
-                            racetime.WebSocketConnection(item.dataURL)
+                            await racetime.WebSocketConnection(item.URL)
                         }}
                     />
                 </div>
@@ -274,7 +286,7 @@ function App() {
                     <h1>{"Goal: " + raceInfo?.Goal}</h1>
                     <h1>{"Info: " + raceInfo?.Info}</h1>
                     <div>
-                        {raceInfo?.Entrants.map((Entrant, index) => (
+                        {raceInfo?.Entrants?.map((Entrant, index) => (
                             <div key={index}>{Entrant.User.Name}</div>
                         ))}
                     </div>
@@ -289,10 +301,10 @@ function App() {
                             padding: "8px",
                             whiteSpace: "pre-wrap",
                         }}>
-                        {raceInfo?.Text.map((message, index) => (
+                        {raceInfo?.Text?.map((message, index) => (
                             <div key={index}>
                                 <div>{message.PostedAt}</div>
-                                <div>{message.User.Name}</div>
+                                <div>{message.User?.Name}</div>
                                 <div>{message.Message}</div>
                             </div>
                         ))}
@@ -302,7 +314,7 @@ function App() {
                     <label>
                         <input
                             type="checkbox"
-                            checked={checked}
+                            // checked={checked}
                             onChange={handleChange} />
                         Hide Results
                     </label>
@@ -323,7 +335,7 @@ function App() {
                     <button
                         // disable once race starts
                         disabled={disableStatuses.has(userStatus)}
-                        onClick={() => handleJoinClick}>
+                        onClick={handleJoinClick}>
                         {joinVisible ? "Join" : "Leave"}
                     </button>
 
@@ -331,7 +343,7 @@ function App() {
                     <button
                         // enable once joined; disable on leave
                         disabled={disableStatuses.has(userStatus) || joinVisible}
-                        onClick={() => handleReadyClick}>
+                        onClick={handleReadyClick}>
                         {!readyVisible ? "Ready" : "Unready"}
                     </button>
 
@@ -339,7 +351,7 @@ function App() {
                     <button
                         // only show once race starts
                         disabled={!disableStatuses.has(userStatus)}
-                        onClick={() => handleDoneClick}>
+                        onClick={handleDoneClick}>
                         {!doneVisible ? "Done" : "Undone"}
                     </button>
 
@@ -347,7 +359,7 @@ function App() {
                     <button
                         // only show once race starts
                         disabled={!disableStatuses.has(userStatus)}
-                        onClick={() => handleForfeitClick}>
+                        onClick={handleForfeitClick}>
                         {!forfeitVisible ? "Forfeit" : "Unforfeit"}
                     </button>
 
