@@ -2,7 +2,6 @@ export type ButtonData = {
   id: string;
   label: string;
   URL: string;
-  dataURL: string;
   action?: string;
   disabled?: boolean;
   title?: string;

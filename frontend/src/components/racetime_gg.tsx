@@ -19,7 +19,6 @@ export async function RaceList() {
         for (let index = 0; index < json.races.length; index++) {
             const categoryName = json.races[index].category.name;
             const URL = json.races[index].url;
-            const dataURL = json.races[index].data_url;
             const entrantCount = json.races[index].entrants_count;
             const entrantFinishedCount = json.races[index].entrants_count_finished;
             const goal = json.races[index].goal.name;
@@ -28,7 +27,6 @@ export async function RaceList() {
             const startedAt = json.races[index].started_at;
             console.log(categoryName);
             console.log(URL);
-            console.log(dataURL);
             console.log(entrantCount);
             console.log(entrantFinishedCount);
             console.log(goal);
@@ -43,7 +41,6 @@ export async function RaceList() {
             DATA.push({
                 id: index.toString(),
                 URL: URL,
-                dataURL: dataURL,
                 label: "[" + runTime + "] " + categoryName + " - " + goal + " (" + entrantFinishedCount + "/" + entrantCount + " Finished)"
             });
         }
