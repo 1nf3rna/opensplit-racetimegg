@@ -18,46 +18,47 @@ import (
 )
 
 const socketUrl = "ws://localhost:8000"
+const WebRaceServer = "http://localhost:8000"
 
-type RaceState int
+// type RaceState int
 
-const (
-	invitational = iota
-	pending
-	partitioned //(only for ladder 1v1 races)
-	open
-	inProgressState
-	finished
-	cancelled
-)
+// const (
+// 	invitational = iota
+// 	pending
+// 	partitioned //(only for ladder 1v1 races)
+// 	open
+// 	inProgressState
+// 	finished
+// 	cancelled
+// )
 
-type UserRole int
+// type UserRole int
 
-const (
-	Unknown UserRole = iota
-	Anonymous
-	Regular
-	ChannelCreator UserRole = 4
-	Monitor        UserRole = 8
-	Moderator      UserRole = 16
-	Staff          UserRole = 32
-	Bot            UserRole = 64
-	System         UserRole = 128
-)
+// const (
+// 	Unknown UserRole = iota
+// 	Anonymous
+// 	Regular
+// 	ChannelCreator UserRole = 4
+// 	Monitor        UserRole = 8
+// 	Moderator      UserRole = 16
+// 	Staff          UserRole = 32
+// 	Bot            UserRole = 64
+// 	System         UserRole = 128
+// )
 
-type UserStatus int
+// type UserStatus int
 
-const (
-	ready = iota
-	not_ready
-	inProgressStatus
-	done
-	dnf //(did not finish, i.e. forfeited)
-	dq  //(disqualified)
-	requested
-	invited
-	declined
-)
+// const (
+// 	ready = iota
+// 	not_ready
+// 	inProgressStatus
+// 	done
+// 	dnf //(did not finish, i.e. forfeited)
+// 	dq  //(disqualified)
+// 	requested
+// 	invited
+// 	declined
+// )
 
 type RaceInfo struct {
 	Version              int
@@ -73,20 +74,27 @@ type RaceInfo struct {
 }
 
 type Entrant struct {
-	User           User           `json:"user"`                 // user: User data blob for this entrant.
-	UserStatus     UserStatus     `json:"status.value"`         // value: A machine-parsable status text.
-	VerboseValue   string         `json:"status.verbose_value"` // verbose_value: A user-parsable status text, e.g. "In progress".
-	HelpText       string         `json:"status.help_text"`     // help_text: Describes the status, e.g. "Did not finish the race.".
-	FinishTime     *time.Duration `json:"status.finish_time"`   // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
-	FinishedAt     *time.Time     `json:"status.finished_at"`   // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
-	Place          *int           `json:"place"`                // place: Integer indicating what position the user finished in.
-	PlaceOrdinal   *string        `json:"place_ordinal"`        // place_ordinal: String ordinal version of place, e.g. "3rd".
-	Score          *int           `json:"score"`                // score: Integer amount of points earned by this entrant on the relevant leaderboard. Note that this is not the entrant's current score (unless the race is in progress), it is the score they had when they entered the race, not after.
-	ScoreChange    *int           `json:"score_change"`         // score_change Integer amount of points gained/lost as a result of this race, or null (not zero!) if race is not recorded.
-	Comment        *string        `json:"comment"`              // comment: A string containing a pithy comeback supplied by the user post-race, or null if they have no comment. If hide_comments is true and the race has not concluded, this field is always null.
-	HasComment     *bool          `json:"has_comment"`          // has_comment: A boolean indicating if the entrant has made a comment. This field is unaffected by the hide_comments setting.
-	StreamLive     bool           `json:"stream_live"`          // stream_live: Boolean indicating if the user's stream is currently live. This is updated in real-time while a race is in progress, but once an entrant has finished, forfeited or been disqualified it will not be updated.
-	StreamOverride bool           `json:"stream_override"`      // stream_override: Boolean indicating if a moderator overrode the streaming requirement for this race entrant,
+	User           User          `json:"user"` // user: User data blob for this entrant.
+	Status         EntrantStatus `json:"status"`
+	Place          *int          `json:"place"`           // place: Integer indicating what position the user finished in.
+	PlaceOrdinal   *string       `json:"place_ordinal"`   // place_ordinal: String ordinal version of place, e.g. "3rd".
+	Score          *int          `json:"score"`           // score: Integer amount of points earned by this entrant on the relevant leaderboard. Note that this is not the entrant's current score (unless the race is in progress), it is the score they had when they entered the race, not after.
+	ScoreChange    *int          `json:"score_change"`    // score_change Integer amount of points gained/lost as a result of this race, or null (not zero!) if race is not recorded.
+	Comment        *string       `json:"comment"`         // comment: A string containing a pithy comeback supplied by the user post-race, or null if they have no comment. If hide_comments is true and the race has not concluded, this field is always null.
+	HasComment     *bool         `json:"has_comment"`     // has_comment: A boolean indicating if the entrant has made a comment. This field is unaffected by the hide_comments setting.
+	StreamLive     bool          `json:"stream_live"`     // stream_live: Boolean indicating if the user's stream is currently live. This is updated in real-time while a race is in progress, but once an entrant has finished, forfeited or been disqualified it will not be updated.
+	StreamOverride bool          `json:"stream_override"` // stream_override: Boolean indicating if a moderator overrode the streaming requirement for this race entrant,
+}
+
+type EntrantStatus struct {
+	Value        string `json:"value"`         // value: A machine-parsable status text.
+	VerboseValue string `json:"verbose_value"` // verbose_value: A user-parsable status text, e.g. "In progress".
+	HelpText     string `json:"help_text"`     // help_text: Describes the status, e.g. "Did not finish the race.".
+
+	// ISO8601 duration string
+	FinishTime *string `json:"finish_time"` // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
+
+	FinishedAt *time.Time `json:"finished_at"` // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
 }
 
 type Category struct {
@@ -98,9 +106,9 @@ type Category struct {
 }
 
 type RaceStatus struct {
-	State        RaceState `json:"value"`         // value: A machine-parsable status text. Possible values are:
-	VerboseValue string    `json:"verbose_value"` // verbose_value: A user-parsable status text, e.g. "In progress".
-	HelpText     string    `json:"help_text"`     // help_text: Describes the status, e.g. "Race is in progress".
+	State        string `json:"value"`         // value: A machine-parsable status text. Possible values are:
+	VerboseValue string `json:"verbose_value"` // verbose_value: A user-parsable status text, e.g. "In progress".
+	HelpText     string `json:"help_text"`     // help_text: Describes the status, e.g. "Race is in progress".
 }
 
 type Goal struct {
@@ -119,7 +127,7 @@ type User struct {
 	Flair          string `json:"flair"`          // "flair": "monitor supporter",
 	Twitch_name    string `json:"twitch_name"`    // "twitch_name": "ItsaMeMario",
 	Twitch_channel string `json:"twitch_channel"` // "twitch_channel": "https://www.twitch.tv/itsamemario",
-	Can_moderate   bool   `json:"can_moderator"`  // "can_moderate": false
+	Can_moderate   bool   `json:"can_moderate"`   // "can_moderate": false
 }
 
 type App struct {
@@ -137,17 +145,19 @@ type App struct {
 	CurrentRace          RaceInfo
 }
 
-func NewApp(RestProtocol string, WebRaceServer string, RedirectURL string) *App {
+func NewApp() *App {
 	client := &App{
 		verifier: oauth2.GenerateVerifier(),
 		conf: &oauth2.Config{
+			// TODO:
+			// Convert client_id and client_secret to live site (AFTER getting approval from racetime.gg staff)
 			ClientID:     "x4oiff8OAiWwtfQUboFhFlYfgmDMHmxduOFOQgve",
 			ClientSecret: "1BYxBFqyO495W8VCYiZxAEXgortlLa5trpzY0xxDHNAuAWaqfxhgy4435Gq5yp6P76Hw1EIFdp8JjnKvDtDfzLZ2lo6D1TrrWlp0yNbmBTPpNxYVePSqE7eX72ZDAmaU",
 			Scopes:       []string{"read", "chat_message", "race_action"},
 			// RedirectURL:  RestProtocol + "://" + RedirectURL + "/callback",
 			Endpoint: oauth2.Endpoint{
-				AuthURL:  RestProtocol + "://" + WebRaceServer + "/o/authorize",
-				TokenURL: RestProtocol + "://" + WebRaceServer + "/o/token",
+				AuthURL:  WebRaceServer + "/o/authorize",
+				TokenURL: WebRaceServer + "/o/token",
 			},
 		},
 		writeCh:  make(chan []byte, 10000000),
@@ -167,6 +177,7 @@ func NewApp(RestProtocol string, WebRaceServer string, RedirectURL string) *App 
 	client.handlers["error"] = client.HandleChatError
 	client.handlers["pong"] = client.HandlePong
 	client.handlers["race.data"] = client.HandleRaceData
+	client.handlers["race.renders"] = client.HandleRenders
 
 	return client
 }
@@ -228,22 +239,30 @@ func (a *App) Authorize() {
 	server.Shutdown(a.ctx)
 }
 
-type messageData struct {
-	Action string `json:"type"` //	  "action": "message",
-	// "data":
-	Message   string  `json:"data.message"`             //	    "message": "Your message goes here",
-	Pinned    bool    `json:"data.pinned"`              //	    "pinned": <bool>,
-	Actions   *string `json:"data.actions,omitempty"`   //	    "actions": <object or null>,
-	Direct_to *string `json:"data.direct_to,omitempty"` //	    "direct_to": <string or null>,
-	GUID      string  `json:"data.guid"`                //	    "guid": "<random string>"
+type MessageDataEnvelope struct {
+	Action string      `json:"action"`
+	Data   MessageData `json:"data"`
+}
+
+type MessageData struct {
+	Message   string  `json:"message,omitempty"`   //	    "message": "Your message goes here",
+	Pinned    bool    `json:"pinned,omitempty"`    //	    "pinned": <bool>,
+	Actions   *string `json:"actions,omitempty"`   //	    "actions": <object or null>,
+	Direct_to *string `json:"direct_to,omitempty"` //	    "direct_to": <string or null>,
+	GUID      string  `json:"guid"`                //	    "guid": "<random string>"
 }
 
 func (a *App) SendText(text string, GUID string) {
-	a.Send(messageData{
-		Action:  "message",
-		Message: text,
-		Pinned:  false,
-		GUID:    GUID,
+
+	fmt.Printf("SendText\n")
+
+	a.Send(MessageDataEnvelope{
+		Action: "message",
+		Data: MessageData{
+			Message: text,
+			Pinned:  false,
+			GUID:    GUID,
+		},
 	})
 }
 
@@ -251,34 +270,66 @@ type BaseMessage struct {
 	Type string `json:"type"`
 }
 
+type DurationString string
+
+func (d *DurationString) UnmarshalJSON(data []byte) error {
+	// null
+	if string(data) == "null" {
+		*d = ""
+		return nil
+	}
+
+	// string
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*d = DurationString(s)
+		return nil
+	}
+
+	// number
+	var n int
+	if err := json.Unmarshal(data, &n); err == nil {
+		*d = DurationString(fmt.Sprintf("%d", n))
+		return nil
+	}
+
+	return fmt.Errorf("invalid delay format: %s", string(data))
+}
+
+type ChatMessageEnvelope struct {
+	Type    string      `json:"type"`
+	Message ChatMessage `json:"message"`
+}
+
 type ChatMessage struct {
-	// Type string `json:"type"` //	  "type": "chat.message",
-	//	  "message": {
-	ID            string        `json:"message.id"`            //	    "id": "<string>",
-	User          User          `json:"message.user"`          //	    "user": { <user info object> },
-	Bot           string        `json:"message.bot"`           //	    "bot": "<string>",
-	DirectTo      User          `json:"message.direct_to"`     //	    "direct_to": { <user info object> },
-	PostedAt      time.Time     `json:"message.posted_at"`     //	    "posted_at": "<iso date string>"
-	Message       string        `json:"message.message"`       //	    "message": "<string>",
-	Message_plain string        `json:"message.message_plain"` //	    "message_plain": "<string>",
-	Highlight     bool          `json:"message.highlight"`     //	    "highlight": <bool>,
-	Is_dm         bool          `json:"message.is_dm"`         //	    "is_dm": <bool>,
-	Is_bot        bool          `json:"message.is_bot"`        //	    "is_bot": <bool>,
-	Is_system     bool          `json:"message.is_system"`     //	    "is_system": <bool>,
-	Is_pinned     bool          `json:"message.is_pinned"`     //	    "is_pinned": <bool>,
-	Delay         time.Duration `json:"message.delay"`         //	    "delay": "<iso duration string>",
+	ID            string         `json:"id"`            // "id": "<string>",
+	User          User           `json:"user"`          // "user": { <user info object> },
+	Bot           *string        `json:"bot"`           // "bot": "<string>",
+	DirectTo      *User          `json:"direct_to"`     // "direct_to": { <user info object> },
+	PostedAt      time.Time      `json:"posted_at"`     // "posted_at": "<iso date string>"
+	Message       string         `json:"message"`       // "message": "<string>",
+	Message_plain string         `json:"message_plain"` // "message_plain": "<string>",
+	Highlight     bool           `json:"highlight"`     // "highlight": <bool>,
+	Is_dm         bool           `json:"is_dm"`         // "is_dm": <bool>,
+	Is_bot        bool           `json:"is_bot"`        // "is_bot": <bool>,
+	Is_system     bool           `json:"is_system"`     // "is_system": <bool>,
+	Is_pinned     bool           `json:"is_pinned"`     // "is_pinned": <bool>,
+	Delay         DurationString `json:"delay"`         // "delay": "<iso duration string>",
 	//	    "actions" { <action objects> }
 }
 
 func (a *App) HandleChatMessage(data []byte) {
-	var msg ChatMessage
+	var env ChatMessageEnvelope
 
-	err := json.Unmarshal(data, &msg)
+	err := json.Unmarshal(data, &env)
 	if err != nil {
 		log.Println("chat decode error:", err)
 		return
 	}
 
+	msg := env.Message
+
+	fmt.Printf("ChatMessage\n")
 	fmt.Printf("[CHAT] %+v\n", msg)
 
 	a.CurrentRace.Text = append(a.CurrentRace.Text, msg)
@@ -304,6 +355,8 @@ func (a *App) HandleChatHistory(data []byte) {
 		log.Println("chat decode error:", err)
 		return
 	}
+
+	fmt.Printf("ChatHistory\n")
 
 	fmt.Printf("[CHAT] %+v\n", msg)
 
@@ -331,6 +384,8 @@ func (a *App) HandleChatDM(data []byte) {
 		return
 	}
 
+	fmt.Printf("ChatDM\n")
+
 	fmt.Printf("[CHAT] %+v\n", msg)
 
 	// handle putting DMs in correct tabs
@@ -350,6 +405,8 @@ func (a *App) HandleChatPin(data []byte) {
 		log.Println("chat decode error:", err)
 		return
 	}
+
+	fmt.Printf("ChatPin\n")
 
 	fmt.Printf("[CHAT] %+v\n", msg)
 
@@ -371,30 +428,38 @@ func (a *App) HandleChatUnpin(data []byte) {
 		return
 	}
 
+	fmt.Printf("ChatUnpin\n")
+
 	fmt.Printf("[CHAT] %+v\n", msg)
 
 	// handle unpinning message from the top of chat window
 }
 
+type ChatDeleteEnvelope struct {
+	Type   string     `json:"type"`
+	Delete ChatDelete `json:"delete"`
+}
+
 type ChatDelete struct {
-	// Type string `json:"type"` //     "type": "chat.delete",
-	//     "delete": {
-	ID        string `json:"delete.id"`         //         "id": "<string>",
-	User      User   `json:"delete.user"`       //         "user": { <user info object> },
-	Bot       string `json:"delete.bot"`        //         "bot": "<string>",
-	Is_bot    bool   `json:"delete.is_bot"`     //         "is_bot": <bool>,
-	DeletedBy User   `json:"delete.deleted_by"` //         "deleted_by": { <user info object> }
+	ID        string  `json:"id"`         //         "id": "<string>",
+	User      *User   `json:"user"`       //         "user": { <user info object> },
+	Bot       *string `json:"bot"`        //         "bot": "<string>",
+	Is_bot    bool    `json:"is_bot"`     //         "is_bot": <bool>,
+	DeletedBy User    `json:"deleted_by"` //         "deleted_by": { <user info object> }
 }
 
 func (a *App) HandleChatDelete(data []byte) {
-	var msg ChatDelete
+	var env ChatDeleteEnvelope
 
-	err := json.Unmarshal(data, &msg)
+	err := json.Unmarshal(data, &env)
 	if err != nil {
 		log.Println("chat decode error:", err)
 		return
 	}
 
+	msg := env.Delete
+
+	fmt.Printf("ChatDelete\n")
 	fmt.Printf("[CHAT] %+v\n", msg)
 
 	for i, m := range a.CurrentRace.Text {
@@ -410,22 +475,28 @@ func (a *App) HandleChatDelete(data []byte) {
 	}
 }
 
+type ChatPurgeEnvelope struct {
+	Type  string    `json:"type"`
+	Purge ChatPurge `json:"purge"`
+}
+
 type ChatPurge struct {
-	// Type string `json:"type"` // "type": "chat.purge",
-	// "purge": {
-	User     User `json:"purge.user"`      // "user": { <user info object> },
-	PurgedBy User `json:"purge.purged_by"` // "purged_by": { <user info object> }
+	User     User `json:"user"`      // "user": { <user info object> },
+	PurgedBy User `json:"purged_by"` // "purged_by": { <user info object> }
 }
 
 func (a *App) HandleChatPurge(data []byte) {
-	var msg ChatPurge
+	var env ChatPurgeEnvelope
 
-	err := json.Unmarshal(data, &msg)
+	err := json.Unmarshal(data, &env)
 	if err != nil {
 		log.Println("chat decode error:", err)
 		return
 	}
 
+	msg := env.Purge
+
+	fmt.Printf("ChatPurge\n")
 	fmt.Printf("[CHAT] %+v\n", msg)
 
 	filtered := a.CurrentRace.Text[:0]
@@ -462,6 +533,8 @@ func (a *App) HandleChatError(data []byte) {
 		return
 	}
 
+	fmt.Printf("ChatError\n")
+
 	fmt.Printf("[CHAT] %+v\n", msg)
 
 	// Do stuff depending on the errors
@@ -480,55 +553,64 @@ func (a *App) HandlePong(data []byte) {
 		return
 	}
 
+	fmt.Printf("ChatPong\n")
+
 	fmt.Printf("[CHAT] %+v\n", msg)
+}
+
+type RaceDataMessage struct {
+	Type    string    `json:"type"`
+	Date    time.Time `json:"date"`
+	Race    RaceData  `json:"race"`
+	Version int       `json:"version"`
 }
 
 type RaceData struct {
 	// Type string `json:"type"` //   "type": "race.data",
 	//   "race": {
-	Version               int           `json:"race.version"`                  // version: Integer indicating the data's version. This is incremented whenever a race changes.
-	Name                  string        `json:"race.name"`                     // name: The race's unique name, based on the category and a randomly assigned slug.
-	Category              Category      `json:"race.category"`                 // category: An object giving brief information about the category. Contains:
-	Status                RaceStatus    `json:"race.status"`                   // status: An object giving brief information about the race's status. Contains three keys:
-	URL                   string        `json:"race.url"`                      // url: URL for the main race page.
-	DataURL               string        `json:"race.data_url"`                 // data_url: URL for the race data endpoint, which you can use to obtain more detailed race information.
-	WebsocketURL          string        `json:"race.websocket_url"`            // websocket_url: URL of the race WebSocket, used by the frontend for chat messages and real-time updates.
-	WebsocketBotURL       string        `json:"race.websocket_bot_url"`        // websocket_bot_url: URL of the WebSocket for category bots.
-	WebsocketOauthURL     string        `json:"race.websocket_oauth_url"`      // websocket_oauth_url: URL of the WebSocket for OAuth2-authenticated user connections. Used by third-party applications.
-	Goal                  Goal          `json:"race.goal"`                     // goal: An object describing the race goal.
-	Info                  string        `json:"race.info"`                     // info: String containing additional information for race entrants. This is a combination of info_bot and info_user (in that order).
-	InfoBot               string        `json:"race.info_bot"`                 // info_bot: String containing additional information for race entrants, as set by race bots.
-	InfoUser              string        `json:"race.info_user"`                // info_user: String containing additional information for race entrants, as set by the monitors.
-	EntrantsCount         int           `json:"race.entrants_count"`           // entrants_count: Total number of entrants in this race (including DQ/forfeits).
-	EntrantsCountFinished int           `json:"race.entrants_count_finished"`  // entrants_count_finished: Total number of entrants that have finished (not counting DQ/forfeits).
-	EntrantsCountInactive int           `json:"race.entrants_count_inactive"`  // entrants_count_inactive: Total number of entrants that have been DQed or forfieted.
-	Entrants              []Entrant     `json:"race.entrants"`                 // entrants: The entrants list, given as an array. Ordered by race status, then by finish position (if applicable), then by score (if available), and finally by name. See below for a breakdown of entrant data blobs.
-	OpenedAt              time.Time     `json:"race.opened_at"`                // opened_at: Date/time when the race was first created (ISO 8601 date).
-	StartDelay            time.Duration `json:"race.start_delay"`              // start_delay: The time allocated for the countdown, i.e. time lapse between the last entrant readying up and the race starting (ISO 8601 duration).
-	StartedAt             time.Time     `json:"race.started_at"`               // started_at: Date/time when the race started, or null if it hasn't started yet (ISO 8601 date).
-	EndedAt               time.Time     `json:"race.ended_at"`                 // ended_at: Date/time when the race ended, or null if it hasn't finished yet (ISO 8601 date).
-	CancelledAt           time.Time     `json:"race.cancelled_at"`             // cancelled_at: Date/time when the race was cancelled, or null if it hasn't been cancelled (ISO 8601 date).
-	Ranked                bool          `json:"race.ranked"`                   // ranked: Boolean indicating if the race result can be recorded when the race is concluded.
-	Unlisted              bool          `json:"race.unlisted"`                 // unlisted: Boolean indicating an unlisted race (hidden from category view except for moderators).
-	TimeLimit             time.Duration `json:"race.time_limit"`               // time_limit: The maximum amount of time the race may be in progress for once it starts (ISO 8601 duration).
-	TimeLimitAutoComplete bool          `json:"race.time_limit_auto_complete"` // time_limit_auto_complete: Boolean indicating race behaviour if the time limit is reached. If false, the race will be cancelled. If true, the race will be completed (and may still be recorded).
-	RequireEvenTeams      bool          `json:"race.require_even_teams"`       // require_even_teams: Boolean indicating if teams must be balanced for the race to start.
-	StreamingRequired     bool          `json:"race.streaming_required"`       // streaming_required: Boolean indiciating if entrants are required to stream in this race.
-	AutoStart             bool          `json:"race.auto_start"`               // auto_start: Boolean indicating if the race will start automatically when all entrants are ready.
-	OpenedBy              User          `json:"race.opened_by"`                // opened_by: User data blob for the user who opened the race room, or null if the room was opened by a bot. If present, this user is always a race monitor.
-	Monitors              []User        `json:"race.monitors"`                 // monitors: Array of user data blobs for race monitors (in addition to the room opener) in this race.
-	Recordable            bool          `json:"race.recordable"`               // recordable: Boolean indicating a race can be recorded once it's finished. A moderator may still opt to not record the race.
-	Recorded              bool          `json:"race.recorded"`                 // recorded: Boolean indicating if the race has been recorded by a moderator.
-	RecordedBy            User          `json:"race.recorded_by"`              // recorded_by: User data blob of the moderator who recorded this race.
-	DisqualifyUnready     bool          `json:"race.disqualify_unready"`       // disqualify_unready: Boolean indicating if users will be disqualified if they are entered into the race but do not ready up (only applies to 1v1 ladder races)
-	AllowComments         bool          `json:"race.allow_comments"`           // allow_comments: Boolean indicating if users may add a glib remark after they finish racing.
-	HideComments          bool          `json:"race.hide_comments"`            // hide_comments: Boolean indicating if entrant comments will be hidden until the race is finished (or cancelled).
-	HideEntrants          bool          `json:"race.hide_entrants"`            // hide_entrants: Boolean indiciating if entrant identities are currently anonymised.
-	ChatRestricted        bool          `json:"race.chat_restricted"`          // chat_restricted: Boolean indicating if chat restrictions are currently in place (due to allow_prerace_chat or other settings).
-	AllowPreraceChat      bool          `json:"race.allow_prerace_chat"`       // allow_prerace_chat: Boolean indicating if users may chat while the race is preparing (does not affect monitors or moderators).
-	AllowMidraceChat      bool          `json:"race.allow_midrace_chat"`       // allow_midrace_chat: Boolean indicating if users may chat while the race is in progress (does not affect monitors or moderators).
-	AllowNonEntrantChat   bool          `json:"race.allow_non_entrant_chat"`   // allow_non_entrant_chat: Boolean indicating if users who have not entered the race may chat while the race is in progress (does not affect moderators).
-	ChatMessageDelay      time.Duration `json:"race.chat_message_delay"`       // chat_message_delay: Length of time where chat messages will only appear for race monitors (ISO 8601 duration).
+	Version               int        `json:"version"`                  // version: Integer indicating the data's version. This is incremented whenever a race changes.
+	Name                  string     `json:"name"`                     // name: The race's unique name, based on the category and a randomly assigned slug.
+	Category              Category   `json:"category"`                 // category: An object giving brief information about the category. Contains:
+	Status                RaceStatus `json:"status"`                   // status: An object giving brief information about the race's status. Contains three keys:
+	URL                   string     `json:"url"`                      // url: URL for the main race page.
+	DataURL               string     `json:"data_url"`                 // data_url: URL for the race data endpoint, which you can use to obtain more detailed race information.
+	WebsocketURL          string     `json:"websocket_url"`            // websocket_url: URL of the race WebSocket, used by the frontend for chat messages and real-time updates.
+	WebsocketBotURL       string     `json:"websocket_bot_url"`        // websocket_bot_url: URL of the WebSocket for category bots.
+	WebsocketOauthURL     string     `json:"websocket_oauth_url"`      // websocket_oauth_url: URL of the WebSocket for OAuth2-authenticated user connections. Used by third-party applications.
+	Goal                  Goal       `json:"goal"`                     // goal: An object describing the race goal.
+	Info                  string     `json:"info"`                     // info: String containing additional information for race entrants. This is a combination of info_bot and info_user (in that order).
+	InfoBot               *string    `json:"info_bot"`                 // info_bot: String containing additional information for race entrants, as set by race bots.
+	InfoUser              string     `json:"info_user"`                // info_user: String containing additional information for race entrants, as set by the monitors.
+	EntrantsCount         int        `json:"entrants_count"`           // entrants_count: Total number of entrants in this race (including DQ/forfeits).
+	EntrantsCountFinished int        `json:"entrants_count_finished"`  // entrants_count_finished: Total number of entrants that have finished (not counting DQ/forfeits).
+	EntrantsCountInactive int        `json:"entrants_count_inactive"`  // entrants_count_inactive: Total number of entrants that have been DQed or forfieted.
+	Entrants              []Entrant  `json:"entrants"`                 // entrants: The entrants list, given as an array. Ordered by race status, then by finish position (if applicable), then by score (if available), and finally by name. See below for a breakdown of entrant data blobs.
+	OpenedAt              time.Time  `json:"opened_at"`                // opened_at: Date/time when the race was first created (ISO 8601 date).
+	StartDelay            string     `json:"start_delay"`              // start_delay: The time allocated for the countdown, i.e. time lapse between the last entrant readying up and the race starting (ISO 8601 duration).
+	StartedAt             *time.Time `json:"started_at"`               // started_at: Date/time when the race started, or null if it hasn't started yet (ISO 8601 date).
+	EndedAt               *time.Time `json:"ended_at"`                 // ended_at: Date/time when the race ended, or null if it hasn't finished yet (ISO 8601 date).
+	CancelledAt           *time.Time `json:"cancelled_at"`             // cancelled_at: Date/time when the race was cancelled, or null if it hasn't been cancelled (ISO 8601 date).
+	Ranked                bool       `json:"ranked"`                   // ranked: Boolean indicating if the race result can be recorded when the race is concluded.
+	Unlisted              bool       `json:"unlisted"`                 // unlisted: Boolean indicating an unlisted race (hidden from category view except for moderators).
+	TimeLimit             string     `json:"time_limit"`               // time_limit: The maximum amount of time the race may be in progress for once it starts (ISO 8601 duration).
+	TimeLimitAutoComplete bool       `json:"time_limit_auto_complete"` // time_limit_auto_complete: Boolean indicating race behaviour if the time limit is reached. If false, the race will be cancelled. If true, the race will be completed (and may still be recorded).
+	RequireEvenTeams      bool       `json:"require_even_teams"`       // require_even_teams: Boolean indicating if teams must be balanced for the race to start.
+	StreamingRequired     bool       `json:"streaming_required"`       // streaming_required: Boolean indiciating if entrants are required to stream in this race.
+	AutoStart             bool       `json:"auto_start"`               // auto_start: Boolean indicating if the race will start automatically when all entrants are ready.
+	OpenedBy              User       `json:"opened_by"`                // opened_by: User data blob for the user who opened the race room, or null if the room was opened by a bot. If present, this user is always a race monitor.
+	Monitors              []User     `json:"monitors"`                 // monitors: Array of user data blobs for race monitors (in addition to the room opener) in this race.
+	Recordable            bool       `json:"recordable"`               // recordable: Boolean indicating a race can be recorded once it's finished. A moderator may still opt to not record the race.
+	Recorded              bool       `json:"recorded"`                 // recorded: Boolean indicating if the race has been recorded by a moderator.
+	RecordedBy            *User      `json:"recorded_by"`              // recorded_by: User data blob of the moderator who recorded this race.
+	DisqualifyUnready     bool       `json:"disqualify_unready"`       // disqualify_unready: Boolean indicating if users will be disqualified if they are entered into the race but do not ready up (only applies to 1v1 ladder races)
+	AllowComments         bool       `json:"allow_comments"`           // allow_comments: Boolean indicating if users may add a glib remark after they finish racing.
+	HideComments          bool       `json:"hide_comments"`            // hide_comments: Boolean indicating if entrant comments will be hidden until the race is finished (or cancelled).
+	HideEntrants          bool       `json:"hide_entrants"`            // hide_entrants: Boolean indiciating if entrant identities are currently anonymised.
+	ChatRestricted        bool       `json:"chat_restricted"`          // chat_restricted: Boolean indicating if chat restrictions are currently in place (due to allow_prerace_chat or other settings).
+	AllowPreraceChat      bool       `json:"allow_prerace_chat"`       // allow_prerace_chat: Boolean indicating if users may chat while the race is preparing (does not affect monitors or moderators).
+	AllowMidraceChat      bool       `json:"allow_midrace_chat"`       // allow_midrace_chat: Boolean indicating if users may chat while the race is in progress (does not affect monitors or moderators).
+	AllowNonEntrantChat   bool       `json:"allow_non_entrant_chat"`   // allow_non_entrant_chat: Boolean indicating if users who have not entered the race may chat while the race is in progress (does not affect moderators).
+	ChatMessageDelay      string     `json:"chat_message_delay"`       // chat_message_delay: Length of time where chat messages will only appear for race monitors (ISO 8601 duration).
 	// bot_meta: Object containing custom data (see the setmeta command for further details).
 }
 
@@ -537,7 +619,7 @@ type RaceData struct {
 // 2) After a system message
 // 3) After a getrace action
 func (a *App) HandleRaceData(data []byte) {
-	var msg RaceData
+	var msg RaceDataMessage
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
@@ -545,39 +627,47 @@ func (a *App) HandleRaceData(data []byte) {
 		return
 	}
 
-	fmt.Printf("[CHAT] %+v\n", msg)
+	fmt.Printf("[RACE] %+v\n", msg)
+
+	race := msg.Race
 
 	a.CurrentRace.Version = msg.Version
-	a.CurrentRace.Goal = msg.Goal.Name
-	a.CurrentRace.Info = msg.Info
-	a.CurrentRace.Game = msg.Category.Name
-	a.CurrentRace.RaceID = msg.Category.Slug
+	a.CurrentRace.Goal = race.Goal.Name
+	a.CurrentRace.Info = race.Info
+	a.CurrentRace.Game = race.Category.Name
+	a.CurrentRace.RaceID = race.Category.Slug
 
-	a.CurrentRace.EntrantCount = msg.EntrantsCount
-	a.CurrentRace.EntrantFinishedCount = msg.EntrantsCountFinished
+	a.CurrentRace.EntrantCount = race.EntrantsCount
+	a.CurrentRace.EntrantFinishedCount = race.EntrantsCountFinished
 
 	if !a.CurrentRace.DisplayResults {
-		for i := range msg.Entrants {
-			msg.Entrants[i].FinishTime = nil
-			msg.Entrants[i].FinishedAt = nil
-			msg.Entrants[i].Place = nil
-			msg.Entrants[i].PlaceOrdinal = nil
-			msg.Entrants[i].Score = nil
-			msg.Entrants[i].ScoreChange = nil
-			msg.Entrants[i].Comment = nil
-			msg.Entrants[i].HasComment = nil
+		for i := range race.Entrants {
+			race.Entrants[i].Status.FinishTime = nil
+			race.Entrants[i].Status.FinishedAt = nil
+			race.Entrants[i].Place = nil
+			race.Entrants[i].PlaceOrdinal = nil
+			race.Entrants[i].Score = nil
+			race.Entrants[i].ScoreChange = nil
+			race.Entrants[i].Comment = nil
+			race.Entrants[i].HasComment = nil
 		}
 	}
 
-	a.CurrentRace.Entrants = msg.Entrants
+	a.CurrentRace.Entrants = race.Entrants
 
 	// Notify frontend
 	runtime.EventsEmit(a.ctx, "raceStateUpdated", a.CurrentRace)
 
-	a.Send(messageData{
+	a.Send(MessageDataEnvelope{
 		Action: "gethistory",
-		GUID:   a.generateGUID(),
+		Data: MessageData{
+			GUID: a.generateGUID(),
+		},
 	})
+}
+
+func (a *App) HandleRenders(data []byte) {
+	// We don't use this, but it removes an "error"
 }
 
 // true for forfeit; false for unforfeit
@@ -625,15 +715,17 @@ func (a *App) Join(state bool) {
 func (a *App) HideResults(state bool) {
 	a.CurrentRace.DisplayResults = state
 
-	if state {
-		a.Send(messageData{
-			Action: "gettrace",
-			GUID:   a.generateGUID(),
+	if !state {
+		a.Send(MessageDataEnvelope{
+			Action: "getrace",
+			Data: MessageData{
+				GUID: a.generateGUID(),
+			},
 		})
 	} else {
 		for i := range a.CurrentRace.Entrants {
-			a.CurrentRace.Entrants[i].FinishTime = nil
-			a.CurrentRace.Entrants[i].FinishedAt = nil
+			a.CurrentRace.Entrants[i].Status.FinishTime = nil
+			a.CurrentRace.Entrants[i].Status.FinishedAt = nil
 			a.CurrentRace.Entrants[i].Place = nil
 			a.CurrentRace.Entrants[i].PlaceOrdinal = nil
 			a.CurrentRace.Entrants[i].Score = nil
@@ -660,8 +752,6 @@ func (a *App) ForceReload() {
 func (a *App) WebSocketConnection(raceURL string) error {
 	// should probably do this with authorization header as shown here:
 	// https://github.com/racetimeGG/racetime-app/wiki/Category-bots
-
-	// TODO: Fix raceURL
 
 	a.authenticatedRaceURL = socketUrl + "/ws/o/race/" + strings.Split(raceURL, "/")[2] + "?token=" + a.Token.AccessToken
 
@@ -691,6 +781,8 @@ func (a *App) Send(v any) error {
 		return err
 	}
 
+	fmt.Printf("Sending JSON: %s\n", string(data))
+
 	select {
 	case a.writeCh <- data:
 		return nil
@@ -710,6 +802,8 @@ func (a *App) writeRoutine() {
 
 		select {
 		case msg := <-a.writeCh:
+			fmt.Printf("WS WRITE: %s\n", string(msg))
+
 			writeCtx, cancel := context.WithTimeout(
 				a.ctx,
 				5*time.Second,
@@ -758,6 +852,10 @@ func (a *App) readRoutine() {
 			log.Println("invalid json:", err)
 			continue
 		}
+
+		fmt.Printf("ReadThread\n")
+		fmt.Printf("[CHAT] %+v\n", data)
+		fmt.Printf("[CHAT] %+v\n", base)
 
 		handler, ok := a.handlers[base.Type]
 		if !ok {
@@ -838,7 +936,15 @@ func (a *App) refreshTokens() {
 
 	// TODO: catch errors
 	// no token, auth revoked
-	a.conf.TokenSource(ctx, a.Token)
+	ts := a.conf.TokenSource(ctx, a.Token)
+
+	tok, err := ts.Token()
+	if err != nil {
+		log.Println("refresh failed:", err)
+		return
+	}
+
+	a.Token = tok
 
 	// TODO: Remove debug statements
 	fmt.Printf("Access token: %s\n", a.Token.AccessToken)
