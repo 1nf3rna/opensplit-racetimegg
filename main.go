@@ -13,10 +13,8 @@ import (
 var assets embed.FS
 
 func main() {
-	// TODO:
-	// Convert client_id and client_secret to live site (AFTER getting approval from racetime.gg staff)
 	// Create an instance of the app structure
-	app := NewApp("http", "localhost:8000", "localhost:9999")
+	app := NewApp()
 
 	// TODO: switch to environment variable
 	// app.encryptionKey = securestore.KeyFromEnv(os.Getenv("RACETIME_KEY"))
