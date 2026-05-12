@@ -1,10 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import logo from './assets/images/logo-universal.png';
+import connected from './assets/images/connected.png';
+import disconnected from './assets/images/disconnected.png';
 import './App.css';
 import * as racetime from "../wailsjs/go/main/App";
 import { LoginWithOAuth, RaceList } from './components/racetime_gg';
 import { EventsOn, WindowSetSize } from "../wailsjs/runtime";
 import ButtonList, { ButtonData } from "./components/ButtonList"
+
+type UserInfo = {
+    ID: string
+    FullName: string
+    Name: string
+    Discriminator: string
+    Avatar: string
+    TwitchName: string
+    IsStaff: boolean
+}
 
 type RaceInfo = {
     Version: number
@@ -15,65 +27,77 @@ type RaceInfo = {
     DisplayResults: boolean
     EntrantCount: number
     EntrantFinishedCount: number
+    EntrantInactiveCount: number
     Entrants: Entrant[]
     Text: ChatMessage[]
+    Ranked: boolean
+    AutoStart: boolean
+    StatusVerbose: string
+    StatusHelpText: string
+    DisqualifyUnready: boolean
+    Url: string
 }
 
 type ChatMessage = {
-    ID: string                //	    "id": "<string>",
-    User: User                //	    "user": { <user info object> },
-    Bot: string               //	    "bot": "<string>",
-    DirectTo: User           //	    "direct_to": { <user info object> },
-    PostedAt: string         //	    "posted_at": "<iso date string>"
-    Message: string           //	    "message": "<string>",
-    Message_plain: string     //	    "message_plain": "<string>",
-    Highlight: boolean        //	    "highlight": <bool>,
-    Is_dm: boolean            //	    "is_dm": <bool>,
-    Is_bot: boolean           //	    "is_bot": <bool>,
-    Is_system: boolean        //	    "is_system": <bool>,
-    Is_pinned: boolean        //	    "is_pinned": <bool>,
-    Delay: string          //	    "delay": "<iso duration string>",
+    id: string                // "id": "<string>",
+    user: User                // "user": { <user info object> },
+    bot: string               // "bot": "<string>",
+    direct_to: User           // "direct_to": { <user info object> },
+    posted_at: string         // "posted_at": "<iso date string>"
+    message: string           // "message": "<string>",
+    message_plain: string     // "message_plain": "<string>",
+    highlight: boolean        // "highlight": <bool>,
+    is_dm: boolean            // "is_dm": <bool>,
+    is_bot: boolean           // "is_bot": <bool>,
+    is_system: boolean        // "is_system": <bool>,
+    is_pinned: boolean        // "is_pinned": <bool>,
+    delay: string             // "delay": "<iso duration string>",
     //	    "actions" { <action objects> }
 }
 
 type User = {
-    Id: string              // "id": "fR42gLweew3pQlm4",
-    Full_name: string       // "full_name": "Mario#5527",
-    Name: string            // "name": "Mario",
-    Discriminator: string   // "discriminator": "5527",
-    Url: string             // "url": "/user/fR42gLweew3pQlm4",
-    Avatar: string          // "avatar": "/media/mario.png",
-    Pronouns: string        // "pronouns": "he/him",
-    Flair: string           // "flair": "monitor supporter",
-    Twitch_name: string     // "twitch_name": "ItsaMeMario",
-    Twitch_channel: string  // "twitch_channel": "https://www.twitch.tv/itsamemario",
-    Can_moderate: boolean  // "can_moderate": false
+    id: string              // "id": "fR42gLweew3pQlm4",
+    full_name: string       // "full_name": "Mario#5527",
+    name: string            // "name": "Mario",
+    discriminator: string   // "discriminator": "5527",
+    url: string             // "url": "/user/fR42gLweew3pQlm4",
+    avatar: string          // "avatar": "/media/mario.png",
+    pronouns: string        // "pronouns": "he/him",
+    flair: string           // "flair": "monitor supporter",
+    twitch_name: string     // "twitch_name": "ItsaMeMario",
+    twitch_channel: string  // "twitch_channel": "https://www.twitch.tv/itsamemario",
+    can_moderate: boolean   // "can_moderate": false
 }
 
 type Entrant = {
-    User: User                            // user: User data blob for this entrant.
-    UserStatus: UserStatus              // value: A machine-parsable status text.
-    VerboseValue: string          // verbose_value: A user-parsable status text, e.g. "In progress".
-    HelpText: string              // help_text: Describes the status, e.g. "Did not finish the race.".
-    FinishTime: string    // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
-    FinishedAt: string        // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
-    Place: number                           // place: Integer indicating what position the user finished in.
-    PlaceOrdinal: string                // place_ordinal: String ordinal version of place, e.g. "3rd".
-    Score: number                           // score: Integer amount of points earned by this entrant on the relevant leaderboard. Note that this is not the entrant's current score (unless the race is in progress), it is the score they had when they entered the race, not after.
-    ScoreChange: number                    // score_change Integer amount of points gained/lost as a result of this race, or null (not zero!) if race is not recorded.
-    Comment: string                      // comment: A string containing a pithy comeback supplied by the user post-race, or null if they have no comment. If hide_comments is true and the race has not concluded, this field is always null.
-    HasComment: boolean                    // has_comment: A boolean indicating if the entrant has made a comment. This field is unaffected by the hide_comments setting.
-    StreamLive: boolean                     // stream_live: Boolean indicating if the user's stream is currently live. This is updated in real-time while a race is in progress, but once an entrant has finished, forfeited or been disqualified it will not be updated.
-    StreamOverride: boolean                 // stream_override: Boolean indicating if a moderator overrode the streaming requirement for this race entrant,
+    user: User                  // user: User data blob for this entrant.
+    value: UserStatus           // value: A machine-parsable status text.
+    verbose_value: string       // verbose_value: A user-parsable status text, e.g. "In progress".
+    help_text: string           // help_text: Describes the status, e.g. "Did not finish the race.".
+    finish_time: string         // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
+    finished_at: string         // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
+    place: number               // place: Integer indicating what position the user finished in.
+    place_ordinal: string       // place_ordinal: String ordinal version of place, e.g. "3rd".
+    score: number               // score: Integer amount of points earned by this entrant on the relevant leaderboard. Note that this is not the entrant's current score (unless the race is in progress), it is the score they had when they entered the race, not after.
+    score_change: number        // score_change Integer amount of points gained/lost as a result of this race, or null (not zero!) if race is not recorded.
+    comment: string             // comment: A string containing a pithy comeback supplied by the user post-race, or null if they have no comment. If hide_comments is true and the race has not concluded, this field is always null.
+    has_comment: boolean        // has_comment: A boolean indicating if the entrant has made a comment. This field is unaffected by the hide_comments setting.
+    stream_live: boolean        // stream_live: Boolean indicating if the user's stream is currently live. This is updated in real-time while a race is in progress, but once an entrant has finished, forfeited or been disqualified it will not be updated.
+    stream_override: boolean    // stream_override: Boolean indicating if a moderator overrode the streaming requirement for this race entrant,
 }
 
 type UserStatus =
-    "ready"
-    | "not_ready"
-    | "in_progress"
-    | "done"
-    | "dnf" //(did not finish, i.e. forfeited)
-    | "dq" //(disqualified)
+    "requested"     // (requested to join)
+    | "invited"     // (invited to join)
+    | "declined"    // (declined invitation)
+    | "partitioned" // (moved to a 1v1 race room, only for 1v1 ladder races)
+    | "not_joined"  // default state (set on leave)
+    | "ready"       // only when joined before race start
+    | "not_ready"   // only when joined before race start
+    | "in_progress" // only when joined after race start
+    | "done"        // only when joined after race start
+    | "dnf"         // only when joined after race start (did not finish, i.e. forfeited)
+    | "dq"          // only when joined after race start (disqualified)
 
 const disableStatuses = new Set<UserStatus>([
     "in_progress",
@@ -83,77 +107,212 @@ const disableStatuses = new Set<UserStatus>([
 ]);
 
 function App() {
+
     const [token, setToken] = useState<string>("")
     const [raceList, setRaceList] = useState<ButtonData[]>([])
     const [race, setJoinedRace] = useState<string>("")
-    const [checked, setChecked] = useState<boolean>(false);
     const [textEntry, setTextEntry] = useState<string>("");
     const [joinVisible, setJoinVisible] = useState<boolean>(true);
     const [readyVisible, setReadyVisible] = useState<boolean>(true);
     const [doneVisible, setDoneVisible] = useState<boolean>(true);
     const [forfeitVisible, setForfeitVisible] = useState<boolean>(true);
-    const [userStatus, setUserStatus] = useState<UserStatus>("not_ready");
-    // const [text, setText] = useState<ChatMessage[]>([]);
-    // const [goal, setGoal] = useState<string>("");
+    const [userStatus, setUserStatus] = useState<UserStatus>("not_joined");
     const [raceInfo, setRaceInfo] = useState<RaceInfo>();
-    // const [game, setGame] = useState<string>("Hello from React");
+    const [userInfo, setUserInfo] = useState<UserInfo>();
     const [entrantList, setEntrantList] = useState<Entrant[]>([]);
+    const [canJoin, setCanJoin] = useState<boolean>(true);
+    const [activeChatTab, setActiveChatTab] = useState<string>("main");
+    const [unreadTabs, setUnreadTabs] = useState<Set<string>>(new Set());
 
-    // const handleAuthClick =
-    //     async () => {
-    //         await LoginWithOAuth()
-    //         // This just triggers the useeffects functions
-    //         setToken("get tokens")
-    //     };
+    const joined = userStatus !== "not_joined"
 
-    const handleJoinClick =
-        async () => {
-            await racetime.Join(joinVisible)
-            setJoinVisible(!joinVisible)
+    const raceStarted = disableStatuses.has(userStatus)
+
+    const chatRef = useRef<HTMLDivElement | null>(null);
+
+    const wasAtBottomRef = useRef(true);
+
+    const directMessageUsers = Array.from(
+        new Map(
+            (raceInfo?.Text ?? [])
+                .filter((msg) => msg.is_dm && msg.user)
+                .map((msg) => [msg.user.id, msg.user])
+        ).values()
+    );
+
+    const chatTabs = [
+        { id: "main", label: "Main Chat" },
+        ...directMessageUsers.map((user) => ({
+            id: user.id,
+            label: user.name,
+        })),
+    ];
+
+    const filteredMessages = (raceInfo?.Text ?? []).filter((message) => {
+        // Main chat
+        if (activeChatTab === "main") {
+            return !message.is_dm;
+        }
+
+        // Direct messages
+        if (
+            message.is_dm &&
+            message.user?.id !== activeChatTab
+        ) {
+            setUnreadTabs((prev) => new Set(prev).add(message.user.id));
+        }
+    });
+
+    const isAtBottom = () => {
+        const el = chatRef.current;
+        if (!el) return true;
+
+        return el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    };
+
+    // track scroll position
+    useEffect(() => {
+        const el = chatRef.current;
+        if (!el) return;
+
+        const onScroll = () => {
+            wasAtBottomRef.current =
+                el.scrollHeight - el.scrollTop - el.clientHeight < 50;
         };
 
-    const handleReadyClick =
-        async () => {
-            await racetime.Ready(readyVisible)
-            setReadyVisible(!readyVisible)
-        };
+        el.addEventListener("scroll", onScroll);
+        return () => el.removeEventListener("scroll", onScroll);
+    }, []);
 
-    const handleDoneClick =
-        async () => {
-            await racetime.Done(doneVisible)
-            setDoneVisible(!doneVisible)
-        };
+    // auto-scroll only if user was already at bottom
+    useLayoutEffect(() => {
+        const el = chatRef.current;
+        if (!el) return;
 
-    const handleForfeitClick =
-        async () => {
-            await racetime.Forfeit(forfeitVisible)
-            setForfeitVisible(!forfeitVisible)
-        };
+        if (wasAtBottomRef.current) {
+            el.scrollTop = el.scrollHeight;
+        }
+    }, [raceInfo?.Text]);
 
-    const sendToBackend = async () => {
-        const id: string = crypto.randomUUID();
-        console.log(id);
+    const showJoin = !raceStarted
+    const showReady = joined && !raceStarted
+    const showDone = joined && raceStarted
+    const showForfeit = joined && raceStarted
+
+    const hasTwitchName =
+        userInfo?.TwitchName != null &&
+        userInfo.TwitchName.trim() !== "";
+
+    const handleJoinClick = async () => {
+        await racetime.Join(joinVisible)
+
+        if (joinVisible) {
+            // joining
+            setUserStatus("not_ready")
+        } else {
+            // leaving
+            setUserStatus("not_joined")
+        }
+
+        setJoinVisible(!joinVisible)
+    }
+
+    const handleReadyClick = async () => {
+        await racetime.Ready(readyVisible)
+
+        if (readyVisible) {
+            // becoming ready
+            setUserStatus("ready")
+        } else {
+            // becoming unready
+            setUserStatus("not_ready")
+        }
+
+        setReadyVisible(!readyVisible)
+    }
+
+    const handleDoneClick = async () => {
+        await racetime.Done(doneVisible)
+
+        if (doneVisible) {
+            setUserStatus("done")
+        } else {
+            setUserStatus("in_progress")
+        }
+
+        setDoneVisible(!doneVisible)
+    }
+
+    const handleForfeitClick = async () => {
+        await racetime.Forfeit(forfeitVisible)
+
+        if (forfeitVisible) {
+            setUserStatus("dnf")
+        } else {
+            setUserStatus("in_progress")
+        }
+
+        setForfeitVisible(!forfeitVisible)
+    }
+
+    const handleSend = async () => {
+        if (!textEntry.trim()) return;
+
+        const id = crypto.randomUUID();
         await racetime.SendText(textEntry, id);
+        setTextEntry("");
     };
 
     const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.checked;
 
-        setChecked(value);
         await racetime.HideResults(value);
     };
+
+    // Sets user to in_progress or dq when race starts
+    useEffect(() => {
+        if (!raceInfo) return
+
+        const raceStarted =
+            raceInfo.StatusVerbose?.toLowerCase().includes("progress") ||
+            raceInfo.StatusVerbose?.toLowerCase().includes("started")
+
+        if (
+            raceStarted &&
+            (userStatus === "ready" || userStatus === "not_ready")
+        ) {
+            if (userStatus === "ready") {
+                setUserStatus("in_progress")
+            } else {
+                if (raceInfo.DisqualifyUnready) {
+                    setUserStatus("dq")
+                }
+            }
+        }
+    }, [raceInfo?.StatusVerbose])
+
+    // User can join race
+    useEffect(() => {
+        const eligibilityEvent = EventsOn("joinEligibility", (eligible: boolean) => {
+            setCanJoin(eligible)
+        })
+
+        return () => {
+            eligibilityEvent()
+        }
+    }, [])
 
     // Chat updated
     useEffect(() => {
         const newChatText = EventsOn("chatUpdated", (chatText: ChatMessage[]) => {
+            const shouldAutoScroll = isAtBottom();
+
             setRaceInfo((prev) => {
                 if (!prev) return prev;
-
-                return {
-                    ...prev,
-                    Text: chatText,
-                };
+                return { ...prev, Text: chatText };
             });
+
+            wasAtBottomRef.current = shouldAutoScroll;
         });
 
         return () => {
@@ -161,16 +320,15 @@ function App() {
         };
     }, []);
 
-    // useEffect(() => {
-    //     setText((prev) => {
-    //         if (!prev) return prev
-
-    //         return {
-    //             ...prev,
-    //             Text: text,
-    //         }
-    //     })
-    // }, [text])
+    // UserInfo updated
+    useEffect(() => {
+        const newUserInfo = EventsOn("userInfo", (userInfo: UserInfo) => {
+            setUserInfo(userInfo)
+        })
+        return () => {
+            newUserInfo();
+        };
+    }, []);
 
     // RaceInfo updated
     useEffect(() => {
@@ -227,7 +385,9 @@ function App() {
         }
 
         const fetchRaces = async () => {
-            const raceObj = await RaceList()
+            if (!raceInfo?.Url) return;
+
+            const raceObj = await RaceList(raceInfo.Url)
             setRaceList(raceObj ?? [])
         }
 
@@ -255,7 +415,6 @@ function App() {
                         // This just triggers the useeffects functions
                         setToken("get tokens")
                     }}>
-                    {/* onClick={() => handleAuthClick}> */}
                     Racetime.gg Auth
                 </button>
             </div>
@@ -281,49 +440,127 @@ function App() {
             // show race window
             return (
                 <div id="RaceWindow">
-                    <h1>{"Game: " + raceInfo?.Game}</h1>
-                    <h1>{"Race: " + race}</h1>
-                    <h1>{"Goal: " + raceInfo?.Goal}</h1>
-                    <h1>{"Info: " + raceInfo?.Info}</h1>
+                    <button
+                        onClick={async () => {
+                            await racetime.Join(false)
+                            await racetime.DisconnectRace()
+
+                            setJoinVisible(true)
+                            setReadyVisible(true)
+                            setDoneVisible(true)
+                            setForfeitVisible(true)
+
+                            setUserStatus("not_joined")
+
+                            setJoinedRace("")
+                            setRaceInfo(undefined)
+                            setEntrantList([])
+                        }}>
+                        Back to Races
+                    </button>
+
+                    <div>{"Game: " + raceInfo?.Game}</div>
+                    <div>{"Race: " + race}</div>
+                    <div>{"Goal: " + raceInfo?.Goal}</div>
+                    <div>{"Info: " + raceInfo?.Info}</div>
+                    <div>{"Status: " + raceInfo?.StatusVerbose}</div>
+                    <div>{raceInfo?.StatusHelpText}</div>
+
+                    <div>{"Ranked: " + (raceInfo?.Ranked ? "Yes" : "No")}</div>
+
+                    <div>{"Auto Start: " + (raceInfo?.AutoStart ? "Enabled" : "Disabled")}</div>
                     <div>
                         {raceInfo?.Entrants?.map((Entrant, index) => (
-                            <div key={index}>{Entrant.User.Name}</div>
+                            <div key={index}>
+                                <img
+                                    src={Entrant.stream_live || Entrant.stream_override
+                                        ? connected
+                                        : disconnected}
+                                    alt={Entrant.stream_live || Entrant.stream_override
+                                        ? "Connected"
+                                        : "Disconnected"}
+                                    width={24}
+                                    height={24}
+                                />
+
+                                <div>{Entrant.place_ordinal}</div>
+                                <div>
+                                    <img
+                                        src={Entrant.user.avatar}
+                                        alt={Entrant.user.name}
+                                        width={32}
+                                        height={32}
+                                    />
+                                </div>
+                                <div>{Entrant.user.name}</div>
+                                <div>{Entrant.user.discriminator}</div>
+                                <div>{Entrant.user.pronouns}</div>
+                                <div>{Entrant.value}</div>
+                                <div>{Entrant.finish_time}</div>
+                                <div>{Entrant.score_change}</div>
+                            </div>
                         ))}
+                        <div>{raceInfo?.EntrantCount + " entrants (" + raceInfo?.EntrantInactiveCount + ")"}</div>
                     </div>
 
                     {/* add scrolling text window */}
-                    <div
-                        style={{
-                            width: "400px",
-                            height: "150px",
-                            overflowY: "auto",
-                            border: "1px solid #ccc",
-                            padding: "8px",
-                            whiteSpace: "pre-wrap",
-                        }}>
-                        {raceInfo?.Text?.map((message, index) => (
-                            <div key={index}>
-                                <div>{message.PostedAt}</div>
-                                <div>{message.User?.Name}</div>
-                                <div>{message.Message}</div>
-                            </div>
-                        ))}
+                    <div className="chatContainer">
+
+                        {/* Tabs */}
+                        <div className="chatTabs">
+                            {chatTabs.map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    className={
+                                        activeChatTab === tab.id
+                                            ? "chatTab active"
+                                            : "chatTab"
+                                    }
+                                    onClick={() => setActiveChatTab(tab.id)}
+                                >
+                                    {tab.label} {unreadTabs.has(tab.id) ? "•" : ""}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Chat messages */}
+                        <div
+                            ref={chatRef}
+                            className="chatBox"
+                        >
+                            {filteredMessages.map((message) => (
+                                <div
+                                    key={message.id}
+                                    className={message.is_dm ? "dmMessage" : "mainMessage"}
+                                >
+                                    <div className="chatMeta">
+                                        <span>{message.posted_at}</span>
+                                        <span>
+                                            {message.user?.name ?? "System"}
+                                        </span>
+                                    </div>
+
+                                    <div className="chatText">
+                                        {message.message}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
 
                     {/* add hide results check box */}
                     <label>
                         <input
                             type="checkbox"
-                            // checked={checked}
                             onChange={handleChange} />
                         Hide Results
                     </label>
 
                     {/* add force reload button */}
-                    <button
+                    {/* <button
                         onClick={async () => { await racetime.ForceReload() }}>
                         Force Reload
-                    </button>
+                    </button> */}
 
                     {/* add save log button */}
                     <button
@@ -331,34 +568,38 @@ function App() {
                         Save Log
                     </button>
 
-                    {/* add enter race button */}
+                    {/* join button */}
                     <button
-                        // disable once race starts
-                        disabled={disableStatuses.has(userStatus)}
+                        hidden={!showJoin || !canJoin}
+                        disabled={raceStarted || !canJoin || !hasTwitchName}
                         onClick={handleJoinClick}>
                         {joinVisible ? "Join" : "Leave"}
                     </button>
 
-                    {/* add ready button */}
+                    {!hasTwitchName && (
+                        <div>Please link a Twitch account on racetime.gg to join this race.</div>
+                    )}
+
+                    {/* ready button */}
                     <button
-                        // enable once joined; disable on leave
-                        disabled={disableStatuses.has(userStatus) || joinVisible}
+                        hidden={!showReady || !canJoin}
+                        disabled={!joined || raceStarted}
                         onClick={handleReadyClick}>
                         {!readyVisible ? "Ready" : "Unready"}
                     </button>
 
-                    {/* add done button */}
+                    {/* done button */}
                     <button
-                        // only show once race starts
-                        disabled={!disableStatuses.has(userStatus)}
+                        hidden={!showDone}
+                        disabled={!joined || !raceStarted}
                         onClick={handleDoneClick}>
                         {!doneVisible ? "Done" : "Undone"}
                     </button>
 
-                    {/* add forfeit button */}
+                    {/* forfeit button */}
                     <button
-                        // only show once race starts
-                        disabled={!disableStatuses.has(userStatus)}
+                        hidden={!showForfeit}
+                        disabled={!joined || !raceStarted}
                         onClick={handleForfeitClick}>
                         {!forfeitVisible ? "Forfeit" : "Unforfeit"}
                     </button>
@@ -367,8 +608,15 @@ function App() {
                     <input
                         value={textEntry}
                         onChange={(e) => setTextEntry(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSend();
+                            }
+                        }}
                     />
-                    <button onClick={sendToBackend}>Send</button>
+
+                    <button onClick={handleSend}>Send</button>
                 </div>
             )
         }
