@@ -57,3 +57,84 @@
     border: none;
     background-color: rgba(255, 255, 255, 1);
 }
+
+#RaceWindow {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+}
+
+.chatContainer {
+    display: flex;
+    flex-direction: column;
+    height: 300px;
+    border: 1px solid #444;
+}
+
+.chatTabs {
+    display: flex;
+    overflow-x: auto;
+    border-bottom: 1px solid #444;
+    background: #1e1e1e;
+}
+
+.chatTab {
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    color: white;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.chatTab.active {
+    background: #333;
+    font-weight: bold;
+}
+
+.chatBox {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+/* .chatBox {
+    flex: 1;
+    width: 100%;
+    min-height: 150px;
+
+    max-width: 900px;
+    margin: 0 auto;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    border: 1px solid #ccc;
+    padding: 8px;
+    white-space: pre-wrap;
+    box-sizing: border-box;
+} */
+
+.chatMeta {
+    font-size: 12px;
+    opacity: 0.7;
+    display: flex;
+    gap: 8px;
+}
+
+.chatText {
+    font-size: 14px;
+}
+
+.dmMessage {
+    background: rgba(100, 100, 255, 0.1);
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.mainMessage {
+    padding: 4px;
+}
