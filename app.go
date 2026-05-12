@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"opensplit-racetimegg/processing"
 	"opensplit-racetimegg/securestore"
 	"strings"
 	"sync"
@@ -16,6 +18,27 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/oauth2"
 )
+
+// // OAUTH_REDIRECT_ADDRESS
+// 127.0.0.1
+
+// // OAUTH_REDIRECT_PORT
+// 4888
+
+// // OAUTH_SCOPES
+// read chat_message race_action
+
+// // OAUTH_SERVER
+// https://racetime.gg/
+
+// // PROTOCOL_REST (http or https)
+// https
+
+// // PROTOCOL_WEBSOCKET (ws or wss)
+// wss
+
+// // domain (Domain or IP of the Race-Server)
+// racetime.gg
 
 const socketUrl = "ws://localhost:8000"
 const WebRaceServer = "http://localhost:8000"
@@ -60,6 +83,16 @@ const WebRaceServer = "http://localhost:8000"
 // 	declined
 // )
 
+type UserInfo struct {
+	ID            string `json:"id"`
+	FullName      string `json:"full_name"`
+	Name          string `json:"name"`
+	Discriminator string `json:"discriminator"`
+	Avatar        string `json:"avatar"`
+	TwitchName    string `json:"twitch_name"`
+	IsStaff       bool   `json:"is_staff"`
+}
+
 type RaceInfo struct {
 	Version              int
 	Goal                 string
@@ -69,8 +102,16 @@ type RaceInfo struct {
 	DisplayResults       bool
 	EntrantCount         int
 	EntrantFinishedCount int
+	EntrantInactiveCount int
 	Entrants             []Entrant
 	Text                 []ChatMessage
+	Ranked               bool
+	AutoStart            bool
+	Status               string
+	StatusVerbose        string
+	StatusHelpText       string
+	DisqualifyUnready    bool
+	Url                  string
 }
 
 type Entrant struct {
@@ -143,9 +184,14 @@ type App struct {
 	handlers             map[string]func([]byte)
 	writeCh              chan []byte
 	CurrentRace          RaceInfo
+	User                 UserInfo
+	engine               *processing.Engine
+	osConnectionCh       chan bool
 }
 
 func NewApp() *App {
+	engine, connCh := processing.NewEngine()
+
 	client := &App{
 		verifier: oauth2.GenerateVerifier(),
 		conf: &oauth2.Config{
@@ -160,10 +206,11 @@ func NewApp() *App {
 				TokenURL: WebRaceServer + "/o/token",
 			},
 		},
-		writeCh:  make(chan []byte, 10000000),
-		handlers: map[string]func([]byte){},
+		writeCh:        make(chan []byte, 2000),
+		handlers:       map[string]func([]byte){},
+		engine:         engine,
+		osConnectionCh: connCh,
 	}
-
 	client.CurrentRace.DisplayResults = true
 
 	// Register handlers
@@ -191,27 +238,6 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) generateGUID() string {
 	return uuid.NewString()
 }
-
-// // OAUTH_REDIRECT_ADDRESS
-// 127.0.0.1
-
-// // OAUTH_REDIRECT_PORT
-// 4888
-
-// // OAUTH_SCOPES
-// read chat_message race_action
-
-// // OAUTH_SERVER
-// https://racetime.gg/
-
-// // PROTOCOL_REST (http or https)
-// https
-
-// // PROTOCOL_WEBSOCKET (ws or wss)
-// wss
-
-// // domain (Domain or IP of the Race-Server)
-// racetime.gg
 
 func (a *App) Authorize() {
 	url := a.conf.AuthCodeURL("state", oauth2.AccessTypeOnline, oauth2.S256ChallengeOption(a.verifier))
@@ -297,7 +323,7 @@ func (d *DurationString) UnmarshalJSON(data []byte) error {
 }
 
 type ChatMessageEnvelope struct {
-	Type    string      `json:"type"`
+	// Type    string      `json:"type"`
 	Message ChatMessage `json:"message"`
 }
 
@@ -331,6 +357,13 @@ func (a *App) HandleChatMessage(data []byte) {
 
 	fmt.Printf("ChatMessage\n")
 	fmt.Printf("[CHAT] %+v\n", msg)
+
+	// ignore duplicate messages
+	for _, m := range a.CurrentRace.Text {
+		if m.ID == msg.ID {
+			return
+		}
+	}
 
 	a.CurrentRace.Text = append(a.CurrentRace.Text, msg)
 
@@ -388,7 +421,7 @@ func (a *App) HandleChatDM(data []byte) {
 
 	fmt.Printf("[CHAT] %+v\n", msg)
 
-	// handle putting DMs in correct tabs
+	// This message type doesn't matter
 }
 
 type ChatPin struct {
@@ -407,10 +440,21 @@ func (a *App) HandleChatPin(data []byte) {
 	}
 
 	fmt.Printf("ChatPin\n")
-
 	fmt.Printf("[CHAT] %+v\n", msg)
 
 	// handle pinning message to top of chat window
+	for i, m := range a.CurrentRace.Text {
+		if m.ID == msg.Message.ID {
+			a.CurrentRace.Text[i].Is_pinned = true
+
+			// Notify frontend
+			runtime.EventsEmit(a.ctx, "chatUpdated", a.CurrentRace.Text)
+
+			return
+		}
+	}
+
+	runtime.EventsEmit(a.ctx, "chatUpdated", a.CurrentRace.Text)
 }
 
 type ChatUnpin struct {
@@ -429,14 +473,25 @@ func (a *App) HandleChatUnpin(data []byte) {
 	}
 
 	fmt.Printf("ChatUnpin\n")
-
 	fmt.Printf("[CHAT] %+v\n", msg)
 
 	// handle unpinning message from the top of chat window
+	for i, m := range a.CurrentRace.Text {
+		if m.ID == msg.Message.ID {
+			a.CurrentRace.Text[i].Is_pinned = false
+
+			// Notify frontend
+			runtime.EventsEmit(a.ctx, "chatUpdated", a.CurrentRace.Text)
+
+			return
+		}
+	}
+
+	runtime.EventsEmit(a.ctx, "chatUpdated", a.CurrentRace.Text)
 }
 
 type ChatDeleteEnvelope struct {
-	Type   string     `json:"type"`
+	// Type   string     `json:"type"`
 	Delete ChatDelete `json:"delete"`
 }
 
@@ -476,7 +531,7 @@ func (a *App) HandleChatDelete(data []byte) {
 }
 
 type ChatPurgeEnvelope struct {
-	Type  string    `json:"type"`
+	// Type  string    `json:"type"`
 	Purge ChatPurge `json:"purge"`
 }
 
@@ -538,6 +593,66 @@ func (a *App) HandleChatError(data []byte) {
 	fmt.Printf("[CHAT] %+v\n", msg)
 
 	// Do stuff depending on the errors
+	for _, msgError := range msg.Errors {
+		switch msgError {
+		case "You are not eligible to join this race.":
+			// Streaming required and twitch channel not linked (join   request_to_join   invite)
+			fmt.Println("User not eligible to join race")
+
+			// Disable join button
+			runtime.EventsEmit(a.ctx, "joinEligibility", false)
+		case "Races cannot have more than 5 monitors.":
+			// Inform user too many monitors
+		case "Ensure this value has at most 1000 characters (it has 52428).":
+			// Inform user message is too long
+		case "Race is not an invitational.":
+			// Set if race is being changed from invitational to open when not in that state
+		case "Race is not open.":
+			// Set if race is being changed from open to invitational when not in that state
+		case "Race cannot be started yet.":
+			// Set trying to start race while conditions don't allow it to start (can_begin)
+		case "Cannot cancel a race that is in %(state)s state.":
+			// Set when trying to cancel a done race
+		case "Race cannot be partitioned yet.":
+			// Set when trying to partition a race (can_partition)
+		case "Cannot finish a race that has not been started.":
+			// Set when trying to finish a race that's not in progress (is_in_progress  finish)
+		case "Cannot restart a race from this state.":
+			//(is_unfinalized  unfinish)
+		case "Race cannot be finalized, it is on hold.":
+			//(hold   (un)record)
+		case "This race cannot be recorded because one or more entrants have deleted their account. Please set this race to \"Do not record\".":
+		case "Race is not recordable or already recorded.":
+			//((un)record)
+		case "Race hold cannot be changed now.":
+			// (add/remove hold)
+		case "Unable to comply, racing in progress.":
+			// Set when race in progress and room opener; can't make rematch
+		case "Only race monitors may create a rematch. Start a new race room instead.":
+			// Set when trying to rematch when not a race monitor
+		case "You are not allowed to start a new race.":
+			// User not allowed to make races
+		case "Not a team race.":
+			// Not a team race (create team   join team   get_available_teams)
+		case "Cannot join a team (join the race first!).":
+			// Join race first
+		case "You are already in that team.":
+			// Cannot join team multiple times
+		case "Cannot change team during the race.":
+		case "You cannot join that team without an invitation.":
+		case "You are not allowed to quit this race.":
+			// invite or joined and disqualify_unready enabled (decline_invite   leave)
+		case "You must join a team before readying up.":
+		case "You cannot finish this early. Did you hit .done by accident?":
+			// trying to finish before 5s have passed
+		case "You cannot undo your finish as the race time limit has expired.":
+		case "You cannot undo your finish as you have joined another race.":
+		case "You cannot forfeit this early. If you are using an auto-splitter, you should configure it to not auto-reset the timer when starting a run.":
+			// trying to forfeit before 5s have passed
+		case "You cannot undo your forfeit as the race time limit has expired.":
+		case "You cannot undo your forfeit as you have joined another race.":
+		}
+	}
 }
 
 type Pong struct {
@@ -554,7 +669,6 @@ func (a *App) HandlePong(data []byte) {
 	}
 
 	fmt.Printf("ChatPong\n")
-
 	fmt.Printf("[CHAT] %+v\n", msg)
 }
 
@@ -631,6 +745,19 @@ func (a *App) HandleRaceData(data []byte) {
 
 	race := msg.Race
 
+	previousStatus := a.CurrentRace.Status
+	a.CurrentRace.Status = race.Status.State
+
+	if previousStatus != "in_progress" &&
+		a.CurrentRace.Status == "in_progress" {
+
+		fmt.Println("Race started -> sending OpenSplit split command")
+
+		if a.engine != nil {
+			// a.engine.Split()
+		}
+	}
+
 	a.CurrentRace.Version = msg.Version
 	a.CurrentRace.Goal = race.Goal.Name
 	a.CurrentRace.Info = race.Info
@@ -639,6 +766,14 @@ func (a *App) HandleRaceData(data []byte) {
 
 	a.CurrentRace.EntrantCount = race.EntrantsCount
 	a.CurrentRace.EntrantFinishedCount = race.EntrantsCountFinished
+	a.CurrentRace.EntrantInactiveCount = race.EntrantsCountInactive
+
+	a.CurrentRace.Ranked = race.Ranked
+	a.CurrentRace.AutoStart = race.AutoStart
+	a.CurrentRace.StatusVerbose = race.Status.VerboseValue
+	a.CurrentRace.StatusHelpText = race.Status.HelpText
+	a.CurrentRace.DisqualifyUnready = race.DisqualifyUnready
+	a.CurrentRace.Url = WebRaceServer
 
 	if !a.CurrentRace.DisplayResults {
 		for i := range race.Entrants {
@@ -656,6 +791,7 @@ func (a *App) HandleRaceData(data []byte) {
 	a.CurrentRace.Entrants = race.Entrants
 
 	// Notify frontend
+	runtime.EventsEmit(a.ctx, "joinEligibility", true)
 	runtime.EventsEmit(a.ctx, "raceStateUpdated", a.CurrentRace)
 
 	a.Send(MessageDataEnvelope{
@@ -744,9 +880,9 @@ func (a *App) SaveLog() {
 	a.SendText(".log", a.generateGUID())
 }
 
-func (a *App) ForceReload() {
-	// no idea
-}
+// func (a *App) ForceReload() {
+// 	// no idea
+// }
 
 // open websocket connection and start goroutines
 func (a *App) WebSocketConnection(raceURL string) error {
@@ -772,6 +908,13 @@ func (a *App) WebSocketConnection(raceURL string) error {
 	go a.readRoutine()
 
 	return nil
+}
+
+func (a *App) DisconnectRace() {
+	if a.racetimeWS != nil {
+		a.racetimeWS.Close(websocket.StatusNormalClosure, "leaving race")
+		a.racetimeWS = nil
+	}
 }
 
 // Convert data to be sent to json before sending
@@ -903,7 +1046,6 @@ func (a *App) pingRoutine() {
 // Access tokens expire after 10 hours
 // Can only be done if the user is authorized. Creates access and refresh tokens that needs to be stored. Expires eventually and needs to be refreshed with the refresh token.
 // Example response should include: access_token, refresh_token, token_type, expires_in, scope
-// func (a *App) GenTokens() (accessToken string, refreshToken string) {
 func (a *App) GenTokens() {
 	ctx := context.Background()
 
@@ -962,17 +1104,55 @@ func (a *App) CheckTokens() (accessToken string) {
 	}
 
 	if !a.Token.Valid() {
+		// access token valid
 		if a.Token.RefreshToken != "" {
-			a.refreshTokens()
-			return a.getAccessToken()
-		} else {
+			// refresh token valid
 			return ""
+
 		}
+		// refresh token invalid
+		a.refreshTokens()
+
 	}
 
+	// access token invalid
 	return a.getAccessToken()
 }
 
 func (a *App) getAccessToken() (accessToken string) {
+	a.getUserInfo()
 	return a.Token.AccessToken
+}
+
+func (a *App) getUserInfo() {
+	client := oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(a.Token))
+
+	resp, err := client.Get(WebRaceServer + "/o/userinfo")
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println("status:", resp.Status)
+		fmt.Println(string(body))
+		return
+	}
+
+	var user UserInfo
+
+	if err := json.Unmarshal(body, &user); err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("%+v\n", user)
+
+	a.User = user
+
+	runtime.EventsEmit(a.ctx, "userInfo", a.User)
 }
