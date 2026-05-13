@@ -219,6 +219,40 @@ func (e *Engine) OpenSplitConnected() bool {
 // 	return nil
 // }
 
+func (e *Engine) UnSplit() bool {
+	packet := buildRCPacket(UNDO, false)
+
+	e.m.Lock()
+	defer e.m.Unlock()
+
+	_, err := e.conn.WriteTo(packet, e.osAddr)
+	if err != nil {
+		fmt.Println(err)
+		// e.updateConnectionStatus(false)
+		return false
+	}
+
+	// e.updateConnectionStatus(true)
+	return true
+}
+
+func (e *Engine) Split() bool {
+	packet := buildRCPacket(SPLIT, false)
+
+	e.m.Lock()
+	defer e.m.Unlock()
+
+	_, err := e.conn.WriteTo(packet, e.osAddr)
+	if err != nil {
+		fmt.Println(err)
+		// e.updateConnectionStatus(false)
+		return false
+	}
+
+	// e.updateConnectionStatus(true)
+	return true
+}
+
 func (e *Engine) Hello() bool {
 	packet := buildRCPacket(HELLO, true)
 
