@@ -754,7 +754,7 @@ func (a *App) HandleRaceData(data []byte) {
 		fmt.Println("Race started -> sending OpenSplit split command")
 
 		if a.engine != nil {
-			// a.engine.Split()
+			a.engine.Split()
 		}
 	}
 
@@ -821,8 +821,10 @@ func (a *App) Forfeit(state bool) {
 func (a *App) Done(state bool) {
 	fmt.Printf("Done status changed!")
 	if state {
+		a.engine.Split()
 		a.SendText(".done", a.generateGUID())
 	} else {
+		a.engine.UnSplit()
 		a.SendText(".undone", a.generateGUID())
 	}
 }
