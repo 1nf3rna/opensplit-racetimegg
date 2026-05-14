@@ -452,8 +452,8 @@ function App() {
                         justifyContent: "center",
                         marginTop: "20px",
                     }}
-                    className="status"
-                >
+                    className="status">
+
                     <table>
                         <tbody>
                             <tr>
@@ -497,8 +497,8 @@ function App() {
                             justifyContent: "center",
                             marginTop: "20px",
                         }}
-                        className="status"
-                    >
+                        className="status">
+
                         <table>
                             <tbody>
                                 <tr>
@@ -541,8 +541,8 @@ function App() {
                             justifyContent: "center",
                             marginTop: "20px",
                         }}
-                        className="status"
-                    >
+                        className="status">
+
                         <table>
                             <tbody>
                                 <tr>
@@ -639,8 +639,7 @@ function App() {
                                             ? "chatTab active"
                                             : "chatTab"
                                     }
-                                    onClick={() => setActiveChatTab(tab.id)}
-                                >
+                                    onClick={() => setActiveChatTab(tab.id)}>
                                     {tab.label} {unreadTabs.has(tab.id) ? "•" : ""}
                                 </button>
                             ))}
@@ -649,13 +648,13 @@ function App() {
                         {/* Chat messages */}
                         <div
                             ref={chatRef}
-                            className="chatBox"
-                        >
+                            className="chatBox">
+
                             {filteredMessages.map((message) => (
                                 <div
                                     key={message.id}
-                                    className={message.is_dm ? "dmMessage" : "mainMessage"}
-                                >
+                                    className={message.is_dm ? "dmMessage" : "mainMessage"}>
+                                        
                                     <div className="chatMeta">
                                         <span>{message.posted_at}</span>
                                         <span>
