@@ -171,6 +171,20 @@ type User struct {
 	Can_moderate   bool   `json:"can_moderate"`   // "can_moderate": false
 }
 
+type ConnectionStatus byte
+
+const (
+	Disconnected   ConnectionStatus = 0
+	Connected      ConnectionStatus = 1
+	Reconnecting   ConnectionStatus = 2
+	WaitingForGame ConnectionStatus = 3
+)
+
+type ConnectionState struct {
+	ConnectionStatus ConnectionStatus `json:"connection_status"`
+	Message          string           `json:"message"`
+}
+
 type App struct {
 	Token                *oauth2.Token
 	verifier             string
@@ -233,6 +247,25 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	go func() {
+		s := ConnectionState{}
+		for {
+			status, ok := <-a.osConnectionCh
+			if !ok {
+				return
+			}
+
+			s.ConnectionStatus = Disconnected
+			s.Message = "OpenSplit Not Found"
+			if status {
+				s.ConnectionStatus = Connected
+				s.Message = "OpenSplit Connected"
+			}
+
+			runtime.EventsEmit(a.ctx, "opensplit:connection", s)
+		}
+	}()
 }
 
 func (a *App) generateGUID() string {
