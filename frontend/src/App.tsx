@@ -1,12 +1,24 @@
 import { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import logo from './assets/images/logo-universal.png';
-import connected from './assets/images/connected.png';
-import disconnected from './assets/images/disconnected.png';
+import connected from './assets/images/broadcast_icon_connected.png';
+import disconnected from './assets/images/broadcast_icon_disconnected.png';
 import './App.css';
 import * as racetime from "../wailsjs/go/main/App";
 import { LoginWithOAuth, RaceList } from './components/racetime_gg';
 import { EventsOn, WindowSetSize } from "../wailsjs/runtime";
 import ButtonList, { ButtonData } from "./components/ButtonList"
+
+enum ConnectionStatus {
+    Disconnected = 0,
+    Connected = 1,
+    Reconnecting = 2,
+    WaitingForGame,
+}
+
+type ConnectionState = {
+    connection_status: ConnectionStatus;
+    message: string;
+};
 
 type UserInfo = {
     ID: string
@@ -123,6 +135,11 @@ function App() {
     const [canJoin, setCanJoin] = useState<boolean>(true);
     const [activeChatTab, setActiveChatTab] = useState<string>("main");
     const [unreadTabs, setUnreadTabs] = useState<Set<string>>(new Set());
+    const [openSplitConnection, setOpenSplitConnection] =
+        useState<ConnectionState>({
+            connection_status: ConnectionStatus.Disconnected,
+            message: "Opensplit Not Found",
+        });
 
     const joined = userStatus !== "not_joined"
 
@@ -269,6 +286,25 @@ function App() {
         await racetime.HideResults(value);
     };
 
+    const getStatusColor = (state: ConnectionStatus) => {
+        switch (state) {
+            case ConnectionStatus.Disconnected:
+                return "red";
+            case ConnectionStatus.Connected:
+                return "#00FF00";
+            case ConnectionStatus.Reconnecting:
+                return "yellow";
+            case ConnectionStatus.WaitingForGame:
+                return "orange";
+        }
+    };
+
+    useEffect(() => {
+        return EventsOn("opensplit:connection", (s: ConnectionState) => {
+            setOpenSplitConnection(s);
+        });
+    }, []);
+
     // Sets user to in_progress or dq when race starts
     useEffect(() => {
         if (!raceInfo) return
@@ -409,6 +445,35 @@ function App() {
         // show login button
         return (
             <div id="Auth">
+                <div
+                    style={{
+                        display: "flex",
+                        width: "100%",
+                        justifyContent: "center",
+                        marginTop: "20px",
+                    }}
+                    className="status"
+                >
+                    <table>
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <div
+                                        style={{
+                                            backgroundColor: getStatusColor(
+                                                openSplitConnection.connection_status,
+                                            ),
+                                            borderRadius: "20px",
+                                            height: "15px",
+                                            width: "15px",
+                                        }}
+                                    ></div>
+                                </td>
+                                <td>{openSplitConnection.message}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <button
                     onClick={async () => {
                         await LoginWithOAuth()
@@ -425,6 +490,35 @@ function App() {
             // show race list buttons
             return (
                 <div id="RaceList">
+                    <div
+                        style={{
+                            display: "flex",
+                            width: "100%",
+                            justifyContent: "center",
+                            marginTop: "20px",
+                        }}
+                        className="status"
+                    >
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <div
+                                            style={{
+                                                backgroundColor: getStatusColor(
+                                                    openSplitConnection.connection_status,
+                                                ),
+                                                borderRadius: "20px",
+                                                height: "15px",
+                                                width: "15px",
+                                            }}
+                                        ></div>
+                                    </td>
+                                    <td>{openSplitConnection.message}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                     <ButtonList
                         data={raceList}
                         onClick={async (item) => {
@@ -440,6 +534,35 @@ function App() {
             // show race window
             return (
                 <div id="RaceWindow">
+                    <div
+                        style={{
+                            display: "flex",
+                            width: "100%",
+                            justifyContent: "center",
+                            marginTop: "20px",
+                        }}
+                        className="status"
+                    >
+                        <table>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <div
+                                            style={{
+                                                backgroundColor: getStatusColor(
+                                                    openSplitConnection.connection_status,
+                                                ),
+                                                borderRadius: "20px",
+                                                height: "15px",
+                                                width: "15px",
+                                            }}
+                                        ></div>
+                                    </td>
+                                    <td>{openSplitConnection.message}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                     <button
                         onClick={async () => {
                             await racetime.Join(false)
