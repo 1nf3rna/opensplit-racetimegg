@@ -1,6 +1,5 @@
 contact racetime.gg about setting up opensplit config
 detect opensplit final split signal to send .done message
-show opensplit connection status
 
 handle chat actions
 handle possible chat errors
