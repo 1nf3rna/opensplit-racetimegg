@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	duration "github.com/channelmeter/iso8601duration"
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -784,10 +785,28 @@ func (a *App) HandleRaceData(data []byte) {
 	if previousStatus != "in_progress" &&
 		a.CurrentRace.Status == "in_progress" {
 
-		fmt.Println("Race started -> sending OpenSplit split command")
+		fmt.Println("Race started")
 
 		if a.engine != nil {
-			a.engine.Split()
+
+			delay := time.Duration(0)
+
+			// Parse ISO-8601 duration like PT10S
+			if race.StartDelay != "" {
+				dur, err := duration.FromString(race.StartDelay)
+				if err != nil {
+					log.Println("failed to parse start_delay:", err)
+				} else {
+					delay = dur.ToDuration()
+				}
+			}
+
+			fmt.Printf("Scheduling OpenSplit split in %s\n", delay)
+
+			time.AfterFunc(delay, func() {
+				fmt.Println("Sending OpenSplit split command")
+				a.engine.Split()
+			})
 		}
 	}
 
