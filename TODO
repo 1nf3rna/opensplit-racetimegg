@@ -1,5 +1,4 @@
-contact racetime.gg about setting up opensplit config
-how does racetime.gg handle delayed start splits?
+how does racetime.gg handle delayed start splits? - note to the user? temporarily replace delay?
 detect opensplit final split signal to send .done message
 add and send a done signal to opensplit instead of split for the end
 
