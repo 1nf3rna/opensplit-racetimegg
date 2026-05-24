@@ -41,8 +41,13 @@ import (
 // // domain (Domain or IP of the Race-Server)
 // racetime.gg
 
+// local dev
 const socketUrl = "ws://localhost:8000"
 const WebRaceServer = "http://localhost:8000"
+
+// live
+// const socketUrl = "wss://racetime.gg"
+// const WebRaceServer = "https://racetime.gg"
 
 // type RaceState int
 
@@ -132,10 +137,8 @@ type EntrantStatus struct {
 	Value        string `json:"value"`         // value: A machine-parsable status text.
 	VerboseValue string `json:"verbose_value"` // verbose_value: A user-parsable status text, e.g. "In progress".
 	HelpText     string `json:"help_text"`     // help_text: Describes the status, e.g. "Did not finish the race.".
-
 	// ISO8601 duration string
-	FinishTime *string `json:"finish_time"` // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
-
+	FinishTime *string    `json:"finish_time"` // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
 	FinishedAt *time.Time `json:"finished_at"` // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
 }
 
@@ -210,11 +213,13 @@ func NewApp() *App {
 	client := &App{
 		verifier: oauth2.GenerateVerifier(),
 		conf: &oauth2.Config{
-			// TODO:
-			// Convert client_id and client_secret to live site (AFTER getting approval from racetime.gg staff)
+			// local dev
 			ClientID:     "x4oiff8OAiWwtfQUboFhFlYfgmDMHmxduOFOQgve",
 			ClientSecret: "1BYxBFqyO495W8VCYiZxAEXgortlLa5trpzY0xxDHNAuAWaqfxhgy4435Gq5yp6P76Hw1EIFdp8JjnKvDtDfzLZ2lo6D1TrrWlp0yNbmBTPpNxYVePSqE7eX72ZDAmaU",
-			Scopes:       []string{"read", "chat_message", "race_action"},
+			// Live racetime.gg
+			// ClientID:     "ILLY5XtgStv8Z3hsQNg8nvWg2f16y4Uau38MwBgD",
+			// ClientSecret: "pLvZfhr7NvcpQwJ5IkVvzgYqGh8WqVWcvmtiMCmy15jFhINotEcfjlkUb6L0WM7tYkt4aNjooyFGRsPo8GjBG0rDcewk40sMWbgnlbL67VnTCKWoVupGd5eJbx2gbQbW",
+			Scopes: []string{"read", "chat_message", "race_action"},
 			// RedirectURL:  RestProtocol + "://" + RedirectURL + "/callback",
 			Endpoint: oauth2.Endpoint{
 				AuthURL:  WebRaceServer + "/o/authorize",
