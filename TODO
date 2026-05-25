@@ -1,5 +1,4 @@
 Test delay replacement
-receive opensplit done signal to send .done message
 
 handle chat actions
 handle possible chat errors
