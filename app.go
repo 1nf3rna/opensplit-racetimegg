@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"opensplit-racetimegg/processing"
 	"opensplit-racetimegg/securestore"
+
 	"strings"
 	"sync"
 	"time"
@@ -113,11 +114,11 @@ type RaceInfo struct {
 	Text                 []ChatMessage
 	Ranked               bool
 	AutoStart            bool
+	Delay                int64
 	Status               string
 	StatusVerbose        string
 	StatusHelpText       string
 	DisqualifyUnready    bool
-	Url                  string
 }
 
 type Entrant struct {
@@ -787,33 +788,17 @@ func (a *App) HandleRaceData(data []byte) {
 	previousStatus := a.CurrentRace.Status
 	a.CurrentRace.Status = race.Status.State
 
-	if previousStatus != "in_progress" &&
-		a.CurrentRace.Status == "in_progress" {
-
-		fmt.Println("Race started")
-
-		if a.engine != nil {
-
-			delay := time.Duration(0)
-
-			// Parse ISO-8601 duration like PT10S
-			if race.StartDelay != "" {
-				dur, err := duration.FromString(race.StartDelay)
-				if err != nil {
-					log.Println("failed to parse start_delay:", err)
-				} else {
-					delay = dur.ToDuration()
-				}
-			}
-
-			fmt.Printf("Scheduling OpenSplit split in %s\n", delay)
-
-			time.AfterFunc(delay, func() {
-				fmt.Println("Sending OpenSplit split command")
-				a.engine.Split()
-			})
+	delay := time.Duration(0)
+	// Parse ISO-8601 duration like PT10S
+	if race.StartDelay != "" {
+		dur, err := duration.FromString(race.StartDelay)
+		if err != nil {
+			log.Println("failed to parse start_delay:", err)
+		} else {
+			delay = dur.ToDuration()
 		}
 	}
+	a.CurrentRace.Delay = delay.Milliseconds()
 
 	a.CurrentRace.Version = msg.Version
 	a.CurrentRace.Goal = race.Goal.Name
@@ -830,7 +815,6 @@ func (a *App) HandleRaceData(data []byte) {
 	a.CurrentRace.StatusVerbose = race.Status.VerboseValue
 	a.CurrentRace.StatusHelpText = race.Status.HelpText
 	a.CurrentRace.DisqualifyUnready = race.DisqualifyUnready
-	a.CurrentRace.Url = WebRaceServer
 
 	if !a.CurrentRace.DisplayResults {
 		for i := range race.Entrants {
@@ -846,6 +830,17 @@ func (a *App) HandleRaceData(data []byte) {
 	}
 
 	a.CurrentRace.Entrants = race.Entrants
+
+	if previousStatus != "in_progress" &&
+		a.CurrentRace.Status == "in_progress" {
+
+		fmt.Println("Race started")
+
+		if a.engine != nil {
+			fmt.Println("Sending OpenSplit split command")
+			a.engine.Split()
+		}
+	}
 
 	// Notify frontend
 	runtime.EventsEmit(a.ctx, "joinEligibility", true)
@@ -867,9 +862,12 @@ func (a *App) HandleRenders(data []byte) {
 func (a *App) Forfeit(state bool) {
 	fmt.Printf("Forfeit status changed!")
 	// if forfeited unforfeit otherwise forfeit
+	a.engine.CLEAR_RUNTIME_OFFSET()
 	if state {
+		a.engine.Done()
 		a.SendText(".forfeit", a.generateGUID())
 	} else {
+		a.engine.UnDone()
 		a.SendText(".unforfeit", a.generateGUID())
 	}
 }
@@ -877,11 +875,12 @@ func (a *App) Forfeit(state bool) {
 // true for done; false for undone
 func (a *App) Done(state bool) {
 	fmt.Printf("Done status changed!")
+	a.engine.CLEAR_RUNTIME_OFFSET()
 	if state {
-		a.engine.Split()
+		a.engine.Done()
 		a.SendText(".done", a.generateGUID())
 	} else {
-		a.engine.UnSplit()
+		a.engine.UnDone()
 		a.SendText(".undone", a.generateGUID())
 	}
 }
@@ -889,6 +888,7 @@ func (a *App) Done(state bool) {
 // true for ready; false for unready
 func (a *App) Ready(state bool) {
 	fmt.Printf("Ready status changed!")
+	a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
 	if state {
 		a.SendText(".ready", a.generateGUID())
 	} else {
@@ -900,8 +900,10 @@ func (a *App) Ready(state bool) {
 func (a *App) Join(state bool) {
 	fmt.Printf("Join status changed!")
 	if state {
+		a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
 		a.SendText(".join", a.generateGUID())
 	} else {
+		a.engine.CLEAR_RUNTIME_OFFSET()
 		a.SendText(".leave", a.generateGUID())
 	}
 }
@@ -1132,55 +1134,105 @@ func (a *App) GenTokens() {
 
 // Can only be done if the user is logged in. Refreshes tokens that needs to be stored.
 // Example response should include: access_token, refresh_token, token_type, expires_in, scope
-func (a *App) refreshTokens() {
+func (a *App) refreshTokens() error {
 	ctx := context.Background()
 
-	// TODO: catch errors
-	// no token, auth revoked
 	ts := a.conf.TokenSource(ctx, a.Token)
 
 	tok, err := ts.Token()
 	if err != nil {
 		log.Println("refresh failed:", err)
-		return
+
+		errStr := strings.ToLower(err.Error())
+
+		// Common OAuth invalid refresh token cases
+		if strings.Contains(errStr, "invalid_grant") ||
+			strings.Contains(errStr, "invalid_token") ||
+			strings.Contains(errStr, "expired") ||
+			strings.Contains(errStr, "revoked") {
+
+			a.invalidateAuth("Session expired. Please log in again.")
+		}
+
+		return err
 	}
 
 	a.Token = tok
 
-	// TODO: Remove debug statements
 	fmt.Printf("Access token: %s\n", a.Token.AccessToken)
 	fmt.Printf("Refresh token: %s\n", a.Token.RefreshToken)
 	fmt.Printf("Token type: %s\n", a.Token.TokenType)
 	fmt.Printf("Access token expires: %s\n", a.Token.Expiry)
 	fmt.Printf("Access token expires: %v\n", a.Token.ExpiresIn)
 
-	securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
+	err = securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
+	if err != nil {
+		log.Println("failed to save refreshed token:", err)
+		return err
+	}
+
+	return nil
 }
 
-func (a *App) CheckTokens() (accessToken string) {
-	if a.Token == nil || (a.Token.RefreshToken == "" && a.Token.AccessToken == "") {
+func (a *App) CheckTokens() string {
+	log.Println("CheckTokens called")
+
+	if a.Token == nil {
+		log.Println("Token is nil")
 		return ""
 	}
 
-	if !a.Token.Valid() {
-		// access token valid
-		if a.Token.RefreshToken != "" {
-			// refresh token valid
-			return ""
-
-		}
-		// refresh token invalid
-		a.refreshTokens()
-
+	if a.Token.Valid() {
+		log.Println("Token valid")
+		return a.getAccessToken()
 	}
 
-	// access token invalid
-	return a.getAccessToken()
+	log.Println("Token expired, refreshing")
+
+	// Access token expired
+
+	// Refresh token missing
+	if a.Token.RefreshToken == "" {
+		a.invalidateAuth("No refresh token available.")
+		return ""
+	}
+
+	// Refresh token exists, try using it
+	err := a.refreshTokens()
+	if err != nil {
+		// invalid/revoked refresh token already handled
+		return ""
+	}
+
+	// Refresh succeeded
+	if a.Token != nil && a.Token.Valid() {
+		return a.getAccessToken()
+	}
+
+	return ""
 }
 
 func (a *App) getAccessToken() (accessToken string) {
-	a.getUserInfo()
+	go a.getUserInfo()
 	return a.Token.AccessToken
+}
+
+func (a *App) invalidateAuth(reason string) {
+	log.Println("authentication invalid:", reason)
+
+	a.Token = nil
+
+	// Remove encrypted token file
+	err := securestore.DeleteToken("token.enc")
+	if err != nil {
+		log.Println("failed to delete token:", err)
+	}
+
+	// Notify frontend
+	runtime.EventsEmit(a.ctx, "authExpired", reason)
+
+	// Disconnect websocket if connected
+	a.DisconnectRace()
 }
 
 func (a *App) getUserInfo() {
@@ -1197,11 +1249,16 @@ func (a *App) getUserInfo() {
 		panic(err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		fmt.Println("status:", resp.Status)
-		fmt.Println(string(body))
+	if resp.StatusCode == http.StatusUnauthorized {
+		a.invalidateAuth("Authentication expired.")
 		return
 	}
+
+	// if resp.StatusCode != http.StatusOK {
+	// 	fmt.Println("status:", resp.Status)
+	// 	fmt.Println(string(body))
+	// 	return
+	// }
 
 	var user UserInfo
 
