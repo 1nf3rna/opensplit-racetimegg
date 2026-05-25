@@ -47,7 +47,6 @@ type RaceInfo = {
     StatusVerbose: string
     StatusHelpText: string
     DisqualifyUnready: boolean
-    Url: string
 }
 
 type ChatMessage = {
@@ -166,19 +165,34 @@ function App() {
     ];
 
     const filteredMessages = (raceInfo?.Text ?? []).filter((message) => {
-        // Main chat
         if (activeChatTab === "main") {
             return !message.is_dm;
         }
 
-        // Direct messages
-        if (
+        return (
             message.is_dm &&
-            message.user?.id !== activeChatTab
-        ) {
-            setUnreadTabs((prev) => new Set(prev).add(message.user.id));
-        }
+            message.user?.id === activeChatTab
+        );
     });
+
+    useEffect(() => {
+        const messages = raceInfo?.Text ?? [];
+
+        const nextUnread = new Set(unreadTabs);
+
+        for (const message of messages) {
+            if (
+                message.is_dm &&
+                message.user &&
+                message.user.id !== activeChatTab
+            ) {
+                nextUnread.add(message.user.id);
+            }
+        }
+
+        setUnreadTabs(nextUnread);
+    }, [raceInfo?.Text, activeChatTab]);
+
 
     const isAtBottom = () => {
         const el = chatRef.current;
@@ -421,9 +435,8 @@ function App() {
         }
 
         const fetchRaces = async () => {
-            if (!raceInfo?.Url) return;
-
-            const raceObj = await RaceList(raceInfo.Url)
+            // const raceObj = await RaceList(raceInfo.Url)
+            const raceObj = await RaceList("http://localhost:8000")
             setRaceList(raceObj ?? [])
         }
 
@@ -477,8 +490,8 @@ function App() {
                 <button
                     onClick={async () => {
                         await LoginWithOAuth()
-                        // This just triggers the useeffects functions
-                        setToken("get tokens")
+                        const raceToken = await racetime.CheckTokens()
+                        setToken(raceToken)
                     }}>
                     Racetime.gg Auth
                 </button>
@@ -639,7 +652,15 @@ function App() {
                                             ? "chatTab active"
                                             : "chatTab"
                                     }
-                                    onClick={() => setActiveChatTab(tab.id)}>
+                                    onClick={() => {
+                                        setActiveChatTab(tab.id);
+
+                                        setUnreadTabs((prev) => {
+                                            const next = new Set(prev);
+                                            next.delete(tab.id);
+                                            return next;
+                                        });
+                                    }}>
                                     {tab.label} {unreadTabs.has(tab.id) ? "•" : ""}
                                 </button>
                             ))}
@@ -654,7 +675,6 @@ function App() {
                                 <div
                                     key={message.id}
                                     className={message.is_dm ? "dmMessage" : "mainMessage"}>
-                                        
                                     <div className="chatMeta">
                                         <span>{message.posted_at}</span>
                                         <span>
@@ -707,7 +727,7 @@ function App() {
                         hidden={!showReady || !canJoin}
                         disabled={!joined || raceStarted}
                         onClick={handleReadyClick}>
-                        {!readyVisible ? "Ready" : "Unready"}
+                        {readyVisible ? "Ready" : "Unready"}
                     </button>
 
                     {/* done button */}
