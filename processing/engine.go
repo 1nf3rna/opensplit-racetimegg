@@ -33,15 +33,18 @@ const (
 	CLEAR_RUNTIME_OFFSET
 )
 
+type Event struct {
+	Command Command
+}
+
 type Engine struct {
-	// L                    *lua.LState
-	m sync.Mutex
-	// values               map[string]emulator.Value
+	m                    sync.Mutex
 	conn                 net.PacketConn
 	osAddr               *net.UDPAddr
 	openSplitConnected   bool
 	opensplitConnectedCh chan bool
-	// tickFunc             *lua.LFunction
+	events               chan Event
+	lastHelloAck         time.Time
 }
 
 func NewEngine() (*Engine, chan bool) {
@@ -56,24 +59,87 @@ func NewEngine() (*Engine, chan bool) {
 	}
 
 	e := &Engine{
-		m: sync.Mutex{},
-		// values:               make(map[string]emulator.Value),
+		m:                    sync.Mutex{},
 		conn:                 conn,
 		osAddr:               addr,
 		opensplitConnectedCh: make(chan bool),
+		events:               make(chan Event, 32),
 	}
 
+	go e.readLoop()
+
 	go func() {
-		ticker := time.NewTicker(1000 * time.Millisecond)
+		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
 		for range ticker.C {
-			e.openSplitConnected = e.Hello()
-			e.updateConnectionStatus(e.openSplitConnected)
+			e.Hello()
+
+			connected := time.Since(e.lastHelloAck) < 3*time.Second
+			e.updateConnectionStatus(connected)
 		}
 	}()
 
 	return e, e.opensplitConnectedCh
+}
+
+func (e *Engine) readLoop() {
+	buf := make([]byte, 1024)
+
+	for {
+		if e.conn == nil {
+			return
+		}
+
+		_ = e.conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+
+		n, _, err := e.conn.ReadFrom(buf)
+		if err != nil {
+			// timeout
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				continue
+			}
+
+			fmt.Println(err)
+			continue
+		}
+
+		// minimum packet size
+		if n < 7 {
+			continue
+		}
+
+		// magic
+		if buf[0] != 'O' ||
+			buf[1] != 'S' ||
+			buf[2] != 'R' ||
+			buf[3] != 'C' {
+			continue
+		}
+
+		cmd := Command(buf[6])
+
+		switch cmd {
+
+		// HELLO ACK
+		case HELLO:
+			e.lastHelloAck = time.Now()
+
+		// OpenSplit emitted DONE
+		case DONE:
+			select {
+			case e.events <- Event{Command: DONE}:
+			default:
+			}
+
+		// OpenSplit emitted UNDONE
+		case UNDONE:
+			select {
+			case e.events <- Event{Command: UNDONE}:
+			default:
+			}
+		}
+	}
 }
 
 func (e *Engine) Close() {
@@ -83,6 +149,10 @@ func (e *Engine) Close() {
 	e.updateConnectionStatus(false)
 	_ = e.conn.Close()
 	e.conn = nil
+}
+
+func (e *Engine) Events() <-chan Event {
+	return e.events
 }
 
 func (e *Engine) OpenSplitConnected() bool {
@@ -179,22 +249,14 @@ func (e *Engine) Hello() bool {
 	packet := buildRCPacket(HELLO, nil, true)
 
 	e.m.Lock()
+	defer e.m.Unlock()
+
 	_, err := e.conn.WriteTo(packet, e.osAddr)
 	if err != nil {
-		e.m.Unlock()
 		fmt.Println(err)
 		return false
 	}
 
-	buf := make([]byte, 7)
-	_ = e.conn.SetReadDeadline(time.Now().Add(1 * time.Second))
-	_, _, err = e.conn.ReadFrom(buf)
-	if err != nil || buf[6] != 0 {
-		e.m.Unlock()
-		fmt.Println(err)
-		return false
-	}
-	e.m.Unlock()
 	return true
 }
 
