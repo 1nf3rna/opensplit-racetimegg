@@ -273,6 +273,25 @@ func (a *App) startup(ctx context.Context) {
 			runtime.EventsEmit(a.ctx, "opensplit:connection", s)
 		}
 	}()
+
+	go func() {
+		for {
+			ev, ok := <-a.engine.Events()
+			if !ok {
+				return
+			}
+
+			switch ev.Command {
+			case processing.DONE:
+				fmt.Println("OpenSplit DONE received")
+				a.SendText(".done", a.generateGUID())
+
+			case processing.UNDONE:
+				fmt.Println("OpenSplit UNDONE received")
+				a.SendText(".undone", a.generateGUID())
+			}
+		}
+	}()
 }
 
 func (a *App) generateGUID() string {
