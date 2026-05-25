@@ -93,6 +93,10 @@ func LoadToken(path string, key []byte) (*oauth2.Token, error) {
 	return &token, nil
 }
 
+func DeleteToken(path string) error {
+	return os.Remove(path)
+}
+
 func KeyFromEnv(secret string) []byte {
 	hash := sha256.Sum256([]byte(secret))
 	return hash[:] // 32 bytes for AES-256
