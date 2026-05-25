@@ -1,6 +1,7 @@
 package processing
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"sync"
@@ -26,6 +27,10 @@ const (
 	TOGGLEGLOBAL
 	FOCUS
 	HELLO
+	DONE
+	UNDONE
+	SET_RUNTIME_OFFSET
+	CLEAR_RUNTIME_OFFSET
 )
 
 type Engine struct {
@@ -84,8 +89,60 @@ func (e *Engine) OpenSplitConnected() bool {
 	return e.openSplitConnected
 }
 
-func (e *Engine) UnSplit() bool {
-	packet := buildRCPacket(UNDO, false)
+func (e *Engine) SET_RUNTIME_OFFSET(delay int64) bool {
+	packet := buildRCPacket(SET_RUNTIME_OFFSET, &delay, false)
+
+	e.m.Lock()
+	defer e.m.Unlock()
+
+	_, err := e.conn.WriteTo(packet, e.osAddr)
+	if err != nil {
+		fmt.Println(err)
+		// e.updateConnectionStatus(false)
+		return false
+	}
+
+	// e.updateConnectionStatus(true)
+	return true
+}
+
+func (e *Engine) CLEAR_RUNTIME_OFFSET() bool {
+	payload := int64(0)
+	packet := buildRCPacket(CLEAR_RUNTIME_OFFSET, &payload, false)
+
+	e.m.Lock()
+	defer e.m.Unlock()
+
+	_, err := e.conn.WriteTo(packet, e.osAddr)
+	if err != nil {
+		fmt.Println(err)
+		// e.updateConnectionStatus(false)
+		return false
+	}
+
+	// e.updateConnectionStatus(true)
+	return true
+}
+
+func (e *Engine) UnDone() bool {
+	packet := buildRCPacket(UNDONE, nil, false)
+
+	e.m.Lock()
+	defer e.m.Unlock()
+
+	_, err := e.conn.WriteTo(packet, e.osAddr)
+	if err != nil {
+		fmt.Println(err)
+		// e.updateConnectionStatus(false)
+		return false
+	}
+
+	// e.updateConnectionStatus(true)
+	return true
+}
+
+func (e *Engine) Done() bool {
+	packet := buildRCPacket(DONE, nil, false)
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -102,7 +159,7 @@ func (e *Engine) UnSplit() bool {
 }
 
 func (e *Engine) Split() bool {
-	packet := buildRCPacket(SPLIT, false)
+	packet := buildRCPacket(SPLIT, nil, false)
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -119,7 +176,7 @@ func (e *Engine) Split() bool {
 }
 
 func (e *Engine) Hello() bool {
-	packet := buildRCPacket(HELLO, true)
+	packet := buildRCPacket(HELLO, nil, true)
 
 	e.m.Lock()
 	_, err := e.conn.WriteTo(packet, e.osAddr)
@@ -141,21 +198,36 @@ func (e *Engine) Hello() bool {
 	return true
 }
 
-func buildRCPacket(command Command, requestAck bool) []byte {
-	var payload = make([]byte, 7)
-	payload[0] = 'O' //magic
-	payload[1] = 'S'
-	payload[2] = 'R'
-	payload[3] = 'C'
-	payload[4] = 1 // version
+func buildRCPacket(command Command, payload *int64, requestAck bool) []byte {
+	var packet = make([]byte, 7)
+	packet[0] = 'O' //magic
+	packet[1] = 'S'
+	packet[2] = 'R'
+	packet[3] = 'C'
+	packet[4] = 1 // version
 	if requestAck {
-		payload[5] = 1
+		packet[5] = 1
 	} else {
-		payload[5] = 0
+		packet[5] = 0
 	}
-	payload[6] = byte(command)
+	packet[6] = byte(command)
 
-	return payload
+	bs := make([]byte, 8)
+	if payload != nil {
+		// Little Endian (Least Significant Byte first)
+		binary.LittleEndian.PutUint64(bs, uint64(*payload))
+		fmt.Printf("LittleEndian: %v\n", bs)
+		packet[7] = bs[0]
+		packet[8] = bs[1]
+		packet[9] = bs[2]
+		packet[10] = bs[3]
+		packet[11] = bs[4]
+		packet[12] = bs[5]
+		packet[13] = bs[6]
+		packet[14] = bs[7]
+	}
+
+	return packet
 }
 
 func (e *Engine) updateConnectionStatus(status bool) {
