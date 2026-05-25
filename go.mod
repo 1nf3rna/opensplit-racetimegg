@@ -6,7 +6,7 @@ require github.com/wailsapp/wails/v2 v2.12.0
 
 require github.com/coder/websocket v1.8.14
 
-require github.com/channelmeter/iso8601duration v0.0.0-20150204201828-8da3af7a2a61 // indirect
+require github.com/channelmeter/iso8601duration v0.0.0-20150204201828-8da3af7a2a61
 
 require (
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
