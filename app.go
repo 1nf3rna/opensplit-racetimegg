@@ -44,12 +44,12 @@ import (
 // racetime.gg
 
 // local dev
-const socketUrl = "ws://localhost:8000"
-const WebRaceServer = "http://localhost:8000"
+// const socketUrl = "ws://localhost:8000"
+// const WebRaceServer = "http://localhost:8000"
 
 // live
-// const socketUrl = "wss://racetime.gg"
-// const WebRaceServer = "https://racetime.gg"
+const socketUrl = "wss://racetime.gg"
+const WebRaceServer = "https://racetime.gg"
 
 // type RaceState int
 
@@ -136,12 +136,11 @@ type Entrant struct {
 }
 
 type EntrantStatus struct {
-	Value        string `json:"value"`         // value: A machine-parsable status text.
-	VerboseValue string `json:"verbose_value"` // verbose_value: A user-parsable status text, e.g. "In progress".
-	HelpText     string `json:"help_text"`     // help_text: Describes the status, e.g. "Did not finish the race.".
-	// ISO8601 duration string
-	FinishTime *string    `json:"finish_time"` // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
-	FinishedAt *time.Time `json:"finished_at"` // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
+	Value        string     `json:"value"`         // value: A machine-parsable status text.
+	VerboseValue string     `json:"verbose_value"` // verbose_value: A user-parsable status text, e.g. "In progress".
+	HelpText     string     `json:"help_text"`     // help_text: Describes the status, e.g. "Did not finish the race.".
+	FinishTime   *string    `json:"finish_time"`   // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
+	FinishedAt   *time.Time `json:"finished_at"`   // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
 }
 
 type Category struct {
@@ -249,12 +248,12 @@ func NewApp() *App {
 		verifier: oauth2.GenerateVerifier(),
 		conf: &oauth2.Config{
 			// local dev
-			ClientID:     "x4oiff8OAiWwtfQUboFhFlYfgmDMHmxduOFOQgve",
-			ClientSecret: "1BYxBFqyO495W8VCYiZxAEXgortlLa5trpzY0xxDHNAuAWaqfxhgy4435Gq5yp6P76Hw1EIFdp8JjnKvDtDfzLZ2lo6D1TrrWlp0yNbmBTPpNxYVePSqE7eX72ZDAmaU",
+			// ClientID:     "x4oiff8OAiWwtfQUboFhFlYfgmDMHmxduOFOQgve",
+			// ClientSecret: "1BYxBFqyO495W8VCYiZxAEXgortlLa5trpzY0xxDHNAuAWaqfxhgy4435Gq5yp6P76Hw1EIFdp8JjnKvDtDfzLZ2lo6D1TrrWlp0yNbmBTPpNxYVePSqE7eX72ZDAmaU",
 			// Live racetime.gg
-			// ClientID:     "ILLY5XtgStv8Z3hsQNg8nvWg2f16y4Uau38MwBgD",
-			// ClientSecret: "pLvZfhr7NvcpQwJ5IkVvzgYqGh8WqVWcvmtiMCmy15jFhINotEcfjlkUb6L0WM7tYkt4aNjooyFGRsPo8GjBG0rDcewk40sMWbgnlbL67VnTCKWoVupGd5eJbx2gbQbW",
-			Scopes: []string{"read", "chat_message", "race_action"},
+			ClientID:     "ILLY5XtgStv8Z3hsQNg8nvWg2f16y4Uau38MwBgD",
+			ClientSecret: "pLvZfhr7NvcpQwJ5IkVvzgYqGh8WqVWcvmtiMCmy15jFhINotEcfjlkUb6L0WM7tYkt4aNjooyFGRsPo8GjBG0rDcewk40sMWbgnlbL67VnTCKWoVupGd5eJbx2gbQbW",
+			Scopes:       []string{"read", "chat_message", "race_action"},
 			// RedirectURL:  RestProtocol + "://" + RedirectURL + "/callback",
 			Endpoint: oauth2.Endpoint{
 				AuthURL:  WebRaceServer + "/o/authorize",
@@ -338,7 +337,7 @@ func (a *App) Authorize() {
 
 	codeChan := make(chan string)
 
-	// fmt.Printf("URL for the auth dialog: %v\n", url)
+	a.logger.Info("AuthURL: %v", url)
 
 	server := &http.Server{
 		Addr: ":9999",
@@ -355,6 +354,8 @@ func (a *App) Authorize() {
 	runtime.BrowserOpenURL(a.ctx, url)
 
 	a.authCode = <-codeChan
+
+	a.logger.Info("AuthURL: %v", a.authCode)
 
 	server.Shutdown(a.ctx)
 }
