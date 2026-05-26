@@ -1,9 +1,8 @@
 Test delay replacement
+disable starting timer from opensplit or factfinder if connected to a race
 
 handle chat actions
 handle possible chat errors
 handle bot_meta race data
-
-handle user deauth - might already be done??
 
 css to make frontend pretty
