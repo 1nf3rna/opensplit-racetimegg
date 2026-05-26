@@ -8,6 +8,18 @@ import { LoginWithOAuth, RaceList } from './components/racetime_gg';
 import { EventsOn, WindowSetSize } from "../wailsjs/runtime";
 import ButtonList, { ButtonData } from "./components/ButtonList"
 
+const DEBUG = true;
+
+function logApp(message: string, ...args: any[]) {
+    if (!DEBUG) return;
+
+    console.log(`[APP] ${message}`, ...args);
+}
+
+function logAppError(message: string, error: unknown) {
+    console.error(`[APP] ${message}`, error);
+}
+
 enum ConnectionStatus {
     Disconnected = 0,
     Connected = 1,
@@ -236,6 +248,7 @@ function App() {
 
     const handleJoinClick = async () => {
         await racetime.Join(joinVisible)
+        logApp("join toggled current=%s", joinVisible);
 
         if (joinVisible) {
             // joining
@@ -250,6 +263,7 @@ function App() {
 
     const handleReadyClick = async () => {
         await racetime.Ready(readyVisible)
+        logApp("ready toggled current=%s", readyVisible);
 
         if (readyVisible) {
             // becoming ready
@@ -264,6 +278,7 @@ function App() {
 
     const handleDoneClick = async () => {
         await racetime.Done(doneVisible)
+        logApp("done toggled current=%s", doneVisible);
 
         if (doneVisible) {
             setUserStatus("done")
@@ -276,6 +291,7 @@ function App() {
 
     const handleForfeitClick = async () => {
         await racetime.Forfeit(forfeitVisible)
+        logApp("forfeit toggled current=%s", forfeitVisible);
 
         if (forfeitVisible) {
             setUserStatus("dnf")
@@ -290,6 +306,7 @@ function App() {
         if (!textEntry.trim()) return;
 
         const id = crypto.randomUUID();
+        logApp("sending chat message length=%d", textEntry.length);
         await racetime.SendText(textEntry, id);
         setTextEntry("");
     };
@@ -316,6 +333,11 @@ function App() {
     useEffect(() => {
         return EventsOn("opensplit:connection", (s: ConnectionState) => {
             setOpenSplitConnection(s);
+            logApp(
+                "opensplit status=%d message=%s",
+                s.connection_status,
+                s.message,
+            );
         });
     }, []);
 
@@ -355,6 +377,7 @@ function App() {
     // Chat updated
     useEffect(() => {
         const newChatText = EventsOn("chatUpdated", (chatText: ChatMessage[]) => {
+            logApp("chat updated messages=%d", chatText.length);
             const shouldAutoScroll = isAtBottom();
 
             setRaceInfo((prev) => {
@@ -374,6 +397,11 @@ function App() {
     useEffect(() => {
         const newUserInfo = EventsOn("userInfo", (userInfo: UserInfo) => {
             setUserInfo(userInfo)
+            logApp(
+                "user info updated user=%s twitchLinked=%s",
+                userInfo.Name,
+                userInfo.TwitchName !== "",
+            );
         })
         return () => {
             newUserInfo();
@@ -384,6 +412,11 @@ function App() {
     useEffect(() => {
         const newRaceState = EventsOn("raceStateUpdated", (currentRace: RaceInfo) => {
             setRaceInfo(currentRace)
+            logApp(
+                "race updated goal=%s entrants=%d",
+                currentRace.Goal,
+                currentRace.EntrantCount,
+            );
         })
         return () => {
             newRaceState();
@@ -394,6 +427,7 @@ function App() {
     useEffect(() => {
         const newEntrants = EventsOn("entrantsUpdated", (entrantList: Entrant[]) => {
             setEntrantList(entrantList)
+            logApp("entrants updated count=%d", entrantList.length);
         })
         return () => {
             newEntrants();
@@ -414,10 +448,12 @@ function App() {
     // Gets tokens from backend
     useEffect(() => {
         // call backend function to get token
+        logApp("checking stored auth token");
         (
             async () => {
                 const raceToken = await racetime.CheckTokens()
                 setToken(raceToken)
+                logApp("token check complete present=%s", raceToken !== "");
             }
         )()
     }, [])
@@ -425,19 +461,21 @@ function App() {
     // Gets list of races
     useEffect(() => {
         if (token == "") {
-            console.log("token is blank\n")
+            logApp("race polling skipped: token missing");
             return
         }
 
         if (race != "") {
-            console.log("race button clicked\n")
+            logApp("race polling stopped: race joined");
             return
         }
 
         const fetchRaces = async () => {
+            logApp("fetching race list");
             // const raceObj = await RaceList(raceInfo.Url)
             const raceObj = await RaceList("http://localhost:8000")
             setRaceList(raceObj ?? [])
+            logApp("race list updated count=%d", raceObj?.length ?? 0);
         }
 
         fetchRaces()
@@ -450,8 +488,10 @@ function App() {
     }, [token, race])
 
     useEffect(() => {
-        WindowSetSize(320, 580)
-    }, [])
+        logApp("setting window size");
+
+        WindowSetSize(320, 580);
+    }, []);
 
     if (token == "") {
         // no token
@@ -535,7 +575,8 @@ function App() {
                     <ButtonList
                         data={raceList}
                         onClick={async (item) => {
-                            console.log("Clicked", item);
+                            logApp("joining websocket race=%s", item.URL);
+                            // console.log("Clicked", item);
                             setJoinedRace(item.URL)
                             await racetime.WebSocketConnection(item.URL)
                         }}
@@ -578,6 +619,7 @@ function App() {
                     </div>
                     <button
                         onClick={async () => {
+                            logApp("disconnecting from race");
                             await racetime.Join(false)
                             await racetime.DisconnectRace()
 

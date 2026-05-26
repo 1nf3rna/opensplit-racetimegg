@@ -1,3 +1,11 @@
+const DEBUG = true;
+
+function logButtons(message: string, ...args: any[]) {
+  if (!DEBUG) return;
+
+  console.log(`[BUTTONS] ${message}`, ...args);
+}
+
 export type ButtonData = {
   id: string;
   label: string;
@@ -23,7 +31,18 @@ export default function ButtonList({ data, onClick, className }: Props) {
           id={`btn-${item.id}`}
           title={item.title}
           disabled={item.disabled}
-          onClick={() => !item.disabled && onClick?.(item)}
+          onClick={() => {
+            logButtons(
+              "button clicked id=%s disabled=%s label=%s",
+              item.id,
+              item.disabled,
+              item.label,
+            );
+
+            if (!item.disabled) {
+              onClick?.(item);
+            }
+          }}
         >
           {item.label}
         </button>

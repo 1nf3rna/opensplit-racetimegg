@@ -1,13 +1,27 @@
 import { ButtonData } from "./ButtonList"
 import { Authorize, GenTokens } from "../../wailsjs/go/main/App";
 
+const DEBUG = true;
+
+function logRT(message: string, ...args: any[]) {
+    if (!DEBUG) return;
+
+    console.log(`[RACETIME] ${message}`, ...args);
+}
+
+function logRTError(message: string, error: unknown) {
+    console.error(`[RACETIME] ${message}`, error);
+}
+
 // Get list of races to be displayed
 export async function RaceList(restUrl: string) {
     try {
+        logRT("fetching race list from %s", restUrl);
         const response = await fetch(restUrl + "/races/data");
-        console.log(response)
+        logRT("race list response status=%d", response.status)
         const json = await response.json();   // parse JSON
-        
+        logRT("received %d races", json.races.length);
+
         // Populate buttons with races
         const DATA: ButtonData[] = [
         ];
@@ -21,13 +35,16 @@ export async function RaceList(restUrl: string) {
             const status = json.races[index].status.value;
             // time stamp format 2025-12-06T08:18:13.788Z
             const startedAt = json.races[index].started_at;
-            console.log(categoryName);
-            console.log(URL);
-            console.log(entrantCount);
-            console.log(entrantFinishedCount);
-            console.log(goal);
-            console.log(status);
-            console.log(startedAt);
+            
+            logRT(
+                "race category=%s url=%s entrants=%d finished=%d status=%s startedAt=%s",
+                categoryName,
+                URL,
+                entrantCount,
+                entrantFinishedCount,
+                status,
+                startedAt,
+            );
 
             // TODO: this should be saved from the racelist call
             const x_date_exact_header: Date = new Date("2025-12-06T23:01:07Z");
@@ -43,18 +60,23 @@ export async function RaceList(restUrl: string) {
 
         return DATA
     } catch (err) {
-        console.error(err);
+        logRTError("RaceList failed", err);
     }
 }
 
 // Authenticate and get user tokens
 export async function LoginWithOAuth() {
     try {
-        await Authorize()
+        logRT("starting oauth flow");
+
+        await Authorize();
+
+        logRT("oauth authorization complete");
 
         await GenTokens();
 
+        logRT("token generation complete");
     } catch (error) {
-        console.error("Error initiating OAuth:", error);
+        logRTError("OAuth login failed", error);
     }
 }

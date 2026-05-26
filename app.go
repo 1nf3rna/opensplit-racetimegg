@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"opensplit-racetimegg/processing"
 	"opensplit-racetimegg/securestore"
+	"os"
 
 	"strings"
 	"sync"
@@ -206,6 +207,39 @@ type App struct {
 	User                 UserInfo
 	engine               *processing.Engine
 	osConnectionCh       chan bool
+	logger               *Logger
+}
+
+type Logger struct {
+	debug bool
+}
+
+func NewLogger(debug bool) *Logger {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+
+	return &Logger{
+		debug: debug,
+	}
+}
+
+func (l *Logger) Debug(format string, v ...any) {
+	if !l.debug {
+		return
+	}
+
+	log.Printf("[DEBUG] "+format, v...)
+}
+
+func (l *Logger) Info(format string, v ...any) {
+	log.Printf("[INFO] "+format, v...)
+}
+
+func (l *Logger) Warn(format string, v ...any) {
+	log.Printf("[WARN] "+format, v...)
+}
+
+func (l *Logger) Error(format string, v ...any) {
+	log.Printf("[ERROR] "+format, v...)
 }
 
 func NewApp() *App {
@@ -231,6 +265,7 @@ func NewApp() *App {
 		handlers:       map[string]func([]byte){},
 		engine:         engine,
 		osConnectionCh: connCh,
+		logger:         NewLogger(os.Getenv("DEBUG") == "1"),
 	}
 	client.CurrentRace.DisplayResults = true
 
@@ -283,11 +318,11 @@ func (a *App) startup(ctx context.Context) {
 
 			switch ev.Command {
 			case processing.DONE:
-				fmt.Println("OpenSplit DONE received")
+				a.logger.Info("opensplit DONE event received")
 				a.SendText(".done", a.generateGUID())
 
 			case processing.UNDONE:
-				fmt.Println("OpenSplit UNDONE received")
+				a.logger.Info("opensplit UNDONE event received")
 				a.SendText(".undone", a.generateGUID())
 			}
 		}
@@ -338,8 +373,7 @@ type MessageData struct {
 }
 
 func (a *App) SendText(text string, GUID string) {
-
-	fmt.Printf("SendText\n")
+	a.logger.Debug("SendText called")
 
 	a.Send(MessageDataEnvelope{
 		Action: "message",
@@ -408,7 +442,7 @@ func (a *App) HandleChatMessage(data []byte) {
 
 	err := json.Unmarshal(data, &env)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
 		return
 	}
 
@@ -444,7 +478,8 @@ func (a *App) HandleChatHistory(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
+
 		return
 	}
 
@@ -472,7 +507,8 @@ func (a *App) HandleChatDM(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
+
 		return
 	}
 
@@ -494,7 +530,8 @@ func (a *App) HandleChatPin(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
+
 		return
 	}
 
@@ -527,7 +564,8 @@ func (a *App) HandleChatUnpin(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
+
 		return
 	}
 
@@ -567,7 +605,8 @@ func (a *App) HandleChatDelete(data []byte) {
 
 	err := json.Unmarshal(data, &env)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
+
 		return
 	}
 
@@ -604,7 +643,8 @@ func (a *App) HandleChatPurge(data []byte) {
 
 	err := json.Unmarshal(data, &env)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
+
 		return
 	}
 
@@ -643,7 +683,8 @@ func (a *App) HandleChatError(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
+
 		return
 	}
 
@@ -723,7 +764,8 @@ func (a *App) HandlePong(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
+
 		return
 	}
 
@@ -796,13 +838,21 @@ func (a *App) HandleRaceData(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		log.Println("chat decode error:", err)
+		a.logger.Error("chat decode error: %v", err)
+
 		return
 	}
 
 	fmt.Printf("[RACE] %+v\n", msg)
 
 	race := msg.Race
+
+	a.logger.Info(
+		"race update status=%s entrants=%d finished=%d",
+		race.Status.State,
+		race.EntrantsCount,
+		race.EntrantsCountFinished,
+	)
 
 	previousStatus := a.CurrentRace.Status
 	a.CurrentRace.Status = race.Status.State
@@ -850,10 +900,8 @@ func (a *App) HandleRaceData(data []byte) {
 
 	a.CurrentRace.Entrants = race.Entrants
 
-	if previousStatus != "in_progress" &&
-		a.CurrentRace.Status == "in_progress" {
-
-		fmt.Println("Race started")
+	if previousStatus != "in_progress" && a.CurrentRace.Status == "in_progress" {
+		a.logger.Info("race transitioned to in_progress")
 
 		if a.engine != nil {
 			fmt.Println("Sending OpenSplit split command")
@@ -970,6 +1018,7 @@ func (a *App) WebSocketConnection(raceURL string) error {
 	// https://github.com/racetimeGG/racetime-app/wiki/Category-bots
 
 	a.authenticatedRaceURL = socketUrl + "/ws/o/race/" + strings.Split(raceURL, "/")[2] + "?token=" + a.Token.AccessToken
+	a.logger.Info("connecting websocket: %s", a.authenticatedRaceURL)
 
 	conn, _, err := websocket.Dial(
 		a.ctx,
@@ -992,6 +1041,7 @@ func (a *App) WebSocketConnection(raceURL string) error {
 
 func (a *App) DisconnectRace() {
 	if a.racetimeWS != nil {
+		a.logger.Info("disconnecting websocket")
 		a.racetimeWS.Close(websocket.StatusNormalClosure, "leaving race")
 		a.racetimeWS = nil
 	}
@@ -1004,7 +1054,7 @@ func (a *App) Send(v any) error {
 		return err
 	}
 
-	fmt.Printf("Sending JSON: %s\n", string(data))
+	a.logger.Debug("sending websocket message: %s", string(data))
 
 	select {
 	case a.writeCh <- data:
@@ -1025,7 +1075,7 @@ func (a *App) writeRoutine() {
 
 		select {
 		case msg := <-a.writeCh:
-			fmt.Printf("WS WRITE: %s\n", string(msg))
+			a.logger.Debug("ws write: %s", string(msg))
 
 			writeCtx, cancel := context.WithTimeout(
 				a.ctx,
@@ -1076,13 +1126,12 @@ func (a *App) readRoutine() {
 			continue
 		}
 
-		fmt.Printf("ReadThread\n")
-		fmt.Printf("[CHAT] %+v\n", data)
-		fmt.Printf("[CHAT] %+v\n", base)
+		a.logger.Debug("ws read raw: %s", string(data))
+		a.logger.Debug("ws message type: %s", base.Type)
 
 		handler, ok := a.handlers[base.Type]
 		if !ok {
-			log.Println("unknown message type:", base.Type)
+			a.logger.Warn("unknown websocket message type: %s", base.Type)
 			continue
 		}
 
@@ -1142,11 +1191,15 @@ func (a *App) GenTokens() {
 	a.Token = tok
 
 	// TODO: Remove debug statements
-	fmt.Printf("Access token: %s\n", a.Token.AccessToken)
-	fmt.Printf("Refresh token: %s\n", a.Token.RefreshToken)
-	fmt.Printf("Token type: %s\n", a.Token.TokenType)
-	fmt.Printf("Access token expires: %s\n", a.Token.Expiry)
-	fmt.Printf("Access token expires: %v\n", a.Token.ExpiresIn)
+	a.logger.Info(
+		"token refreshed access_expiry=%s refresh_present=%v",
+		a.Token.Expiry.Format(time.RFC3339),
+		a.Token.RefreshToken != "",
+	)
+	a.logger.Debug("Access token: %s\n", a.Token.AccessToken)
+	a.logger.Debug("Refresh token: %s\n", a.Token.RefreshToken)
+	a.logger.Debug("Token type: %s\n", a.Token.TokenType)
+	a.logger.Debug("Access token expires: %v\n", a.Token.ExpiresIn)
 
 	securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
 }

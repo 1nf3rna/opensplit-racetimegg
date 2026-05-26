@@ -3,6 +3,7 @@ package processing
 import (
 	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -118,6 +119,7 @@ func (e *Engine) readLoop() {
 		}
 
 		cmd := Command(buf[6])
+		log.Printf("[ENGINE] received command=%s", commandName(cmd))
 
 		switch cmd {
 
@@ -161,6 +163,7 @@ func (e *Engine) OpenSplitConnected() bool {
 
 func (e *Engine) SET_RUNTIME_OFFSET(delay int64) bool {
 	packet := buildRCPacket(SET_RUNTIME_OFFSET, &delay, false)
+	log.Printf("[ENGINE] sending command=%s", commandName(SET_RUNTIME_OFFSET))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -179,6 +182,7 @@ func (e *Engine) SET_RUNTIME_OFFSET(delay int64) bool {
 func (e *Engine) CLEAR_RUNTIME_OFFSET() bool {
 	payload := int64(0)
 	packet := buildRCPacket(CLEAR_RUNTIME_OFFSET, &payload, false)
+	log.Printf("[ENGINE] sending command=%s", commandName(CLEAR_RUNTIME_OFFSET))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -196,6 +200,7 @@ func (e *Engine) CLEAR_RUNTIME_OFFSET() bool {
 
 func (e *Engine) UnDone() bool {
 	packet := buildRCPacket(UNDONE, nil, false)
+	log.Printf("[ENGINE] sending command=%s", commandName(UNDONE))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -213,6 +218,7 @@ func (e *Engine) UnDone() bool {
 
 func (e *Engine) Done() bool {
 	packet := buildRCPacket(DONE, nil, false)
+	log.Printf("[ENGINE] sending command=%s", commandName(DONE))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -230,6 +236,7 @@ func (e *Engine) Done() bool {
 
 func (e *Engine) Split() bool {
 	packet := buildRCPacket(SPLIT, nil, false)
+	log.Printf("[ENGINE] sending command=%s", commandName(SPLIT))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -247,6 +254,7 @@ func (e *Engine) Split() bool {
 
 func (e *Engine) Hello() bool {
 	packet := buildRCPacket(HELLO, nil, true)
+	log.Printf("[ENGINE] sending command=%s", commandName(HELLO))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -261,7 +269,13 @@ func (e *Engine) Hello() bool {
 }
 
 func buildRCPacket(command Command, payload *int64, requestAck bool) []byte {
-	var packet = make([]byte, 7)
+	packetSize := 7
+	if payload != nil {
+		packetSize += 8
+	}
+
+	packet := make([]byte, packetSize)
+
 	packet[0] = 'O' //magic
 	packet[1] = 'S'
 	packet[2] = 'R'
@@ -297,5 +311,24 @@ func (e *Engine) updateConnectionStatus(status bool) {
 	select {
 	case e.opensplitConnectedCh <- e.openSplitConnected:
 	default:
+	}
+}
+
+func commandName(cmd Command) string {
+	switch cmd {
+	case HELLO:
+		return "HELLO"
+	case DONE:
+		return "DONE"
+	case UNDONE:
+		return "UNDONE"
+	case SPLIT:
+		return "SPLIT"
+	case SET_RUNTIME_OFFSET:
+		return "SET_RUNTIME_OFFSET"
+	case CLEAR_RUNTIME_OFFSET:
+		return "CLEAR_RUNTIME_OFFSET"
+	default:
+		return fmt.Sprintf("UNKNOWN(%d)", cmd)
 	}
 }

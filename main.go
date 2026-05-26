@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"log"
 	"opensplit-racetimegg/securestore"
 
 	"github.com/wailsapp/wails/v2"
@@ -13,6 +14,8 @@ import (
 var assets embed.FS
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
+
 	// Create an instance of the app structure
 	app := NewApp()
 
