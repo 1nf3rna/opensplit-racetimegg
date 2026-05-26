@@ -13,12 +13,38 @@ function logRTError(message: string, error: unknown) {
     console.error(`[RACETIME] ${message}`, error);
 }
 
+function formatElapsed(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return [
+        hours.toString().padStart(2, "0"),
+        minutes.toString().padStart(2, "0"),
+        seconds.toString().padStart(2, "0"),
+    ].join(":");
+}
+
 // Get list of races to be displayed
 export async function RaceList(restUrl: string) {
     try {
         logRT("fetching race list from %s", restUrl);
+
         const response = await fetch(restUrl + "/races/data");
         logRT("race list response status=%d", response.status)
+
+        // Read x-date-exact header from response
+        const exactHeader = response.headers.get("x-date-exact");
+
+        if (!exactHeader) {
+            throw new Error("missing x-date-exact header");
+        }
+
+        const serverTime = new Date(exactHeader);
+        logRT("server time=%s", serverTime.toISOString());
+
         const json = await response.json();   // parse JSON
         logRT("received %d races", json.races.length);
 
@@ -27,15 +53,33 @@ export async function RaceList(restUrl: string) {
         ];
 
         for (let index = 0; index < json.races.length; index++) {
-            const categoryName = json.races[index].category.name;
-            const URL = json.races[index].url;
-            const entrantCount = json.races[index].entrants_count;
-            const entrantFinishedCount = json.races[index].entrants_count_finished;
-            const goal = json.races[index].goal.name;
-            const status = json.races[index].status.value;
-            // time stamp format 2025-12-06T08:18:13.788Z
-            const startedAt = json.races[index].started_at;
-            
+            const race = json.races[index];
+
+            const categoryName = race.category.name;
+            const URL = race.url;
+            const entrantCount = race.entrants_count;
+            const entrantFinishedCount = race.entrants_count_finished;
+            const goal = race.goal.name;
+            const status = race.status.value;
+
+            // Convert started_at string to Date
+            const startedAt = race.started_at
+                ? new Date(race.started_at)
+                : null;
+
+            let runTime = "00:00:00";
+
+            if (
+                status === "in_progress" &&
+                startedAt &&
+                !isNaN(startedAt.getTime())
+            ) {
+                const elapsedMs =
+                    serverTime.getTime() - startedAt.getTime();
+
+                runTime = formatElapsed(elapsedMs);
+            }
+
             logRT(
                 "race category=%s url=%s entrants=%d finished=%d status=%s startedAt=%s",
                 categoryName,
@@ -43,14 +87,10 @@ export async function RaceList(restUrl: string) {
                 entrantCount,
                 entrantFinishedCount,
                 status,
-                startedAt,
+                startedAt?.toISOString(),
+                runTime,
             );
 
-            // TODO: this should be saved from the racelist call
-            const x_date_exact_header: Date = new Date("2025-12-06T23:01:07Z");
-            // var elapsedTime: Date = new Date(x_date_exact_header.getTime() - startedAt.getTime())
-            var elapsedTime: Date = new Date(0)
-            var runTime = status == 'in_progress' ? elapsedTime : "0"
             DATA.push({
                 id: index.toString(),
                 URL: URL,
@@ -70,11 +110,9 @@ export async function LoginWithOAuth() {
         logRT("starting oauth flow");
 
         await Authorize();
-
         logRT("oauth authorization complete");
 
         await GenTokens();
-
         logRT("token generation complete");
     } catch (error) {
         logRTError("OAuth login failed", error);
