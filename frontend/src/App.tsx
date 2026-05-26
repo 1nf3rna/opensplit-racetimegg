@@ -472,8 +472,10 @@ function App() {
 
         const fetchRaces = async () => {
             logApp("fetching race list");
-            // const raceObj = await RaceList(raceInfo.Url)
-            const raceObj = await RaceList("http://localhost:8000")
+            //local dev
+            // const raceObj = await RaceList("http://localhost:8000")
+            //live
+            const raceObj = await RaceList("https://racetime.gg")
             setRaceList(raceObj ?? [])
             logApp("race list updated count=%d", raceObj?.length ?? 0);
         }
