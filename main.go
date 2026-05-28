@@ -17,7 +17,7 @@ var assets embed.FS
 func main() {
 	logger := logging.NewLogger(os.Getenv("DEBUG") == "1")
 	// Create an instance of the app structure
-	app := NewApp(logger)
+	app := NewApp()
 
 	// TODO: switch to environment variable
 	// app.encryptionKey = securestore.KeyFromEnv(os.Getenv("RACETIME_KEY"))

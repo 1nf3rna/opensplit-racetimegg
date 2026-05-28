@@ -52,6 +52,8 @@ const WebRaceServer = "https://racetime.gg"
 
 const component = "App"
 
+var logger = logging.NewLogger(true)
+
 // type RaceState int
 
 // const (
@@ -207,10 +209,9 @@ type App struct {
 	User                 UserInfo
 	engine               *processing.Engine
 	osConnectionCh       chan bool
-	logger               *logging.Logger
 }
 
-func NewApp(logger *logging.Logger) *App {
+func NewApp() *App {
 	engine, connCh := processing.NewEngine()
 
 	client := &App{
@@ -233,7 +234,6 @@ func NewApp(logger *logging.Logger) *App {
 		handlers:       map[string]func([]byte){},
 		engine:         engine,
 		osConnectionCh: connCh,
-		logger:         logger,
 	}
 	client.CurrentRace.DisplayResults = true
 
@@ -286,11 +286,11 @@ func (a *App) startup(ctx context.Context) {
 
 			switch ev.Command {
 			case processing.DONE:
-				a.logger.Info("[App]", "opensplit DONE event received")
+				logger.Info("[App]", "opensplit DONE event received")
 				a.SendText(".done", a.generateGUID())
 
 			case processing.UNDONE:
-				a.logger.Info("[App]", "opensplit UNDONE event received")
+				logger.Info("[App]", "opensplit UNDONE event received")
 				a.SendText(".undone", a.generateGUID())
 			}
 		}
@@ -306,7 +306,7 @@ func (a *App) Authorize() {
 
 	codeChan := make(chan string)
 
-	a.logger.Info("AuthURL: %v", url)
+	logger.Info("AuthURL: %v", url)
 
 	server := &http.Server{
 		Addr: ":9999",
@@ -324,7 +324,7 @@ func (a *App) Authorize() {
 
 	a.authCode = <-codeChan
 
-	a.logger.Info("AuthURL: %v", a.authCode)
+	logger.Info("AuthURL: %v", a.authCode)
 
 	server.Shutdown(a.ctx)
 }
@@ -343,7 +343,7 @@ type MessageData struct {
 }
 
 func (a *App) SendText(text string, GUID string) {
-	a.logger.Debug("[App]", "SendText called")
+	logger.Debug("[App]", "SendText called")
 
 	a.Send(MessageDataEnvelope{
 		Action: "message",
@@ -412,14 +412,14 @@ func (a *App) HandleChatMessage(data []byte) {
 
 	err := json.Unmarshal(data, &env)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 		return
 	}
 
 	msg := env.Message
 
-	a.logger.Info("[App]", "ChatMessage\n")
-	a.logger.Info("[App]", "[CHAT] %+v\n", msg)
+	logger.Info("[App]", "ChatMessage\n")
+	logger.Info("[App]", "[CHAT] %+v\n", msg)
 
 	// ignore duplicate messages
 	for _, m := range a.CurrentRace.Text {
@@ -448,13 +448,13 @@ func (a *App) HandleChatHistory(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 
 		return
 	}
 
-	a.logger.Info("[App]", "ChatHistory\n")
-	a.logger.Info("[App]", "[CHAT] %+v\n", msg)
+	logger.Info("[App]", "ChatHistory\n")
+	logger.Info("[App]", "[CHAT] %+v\n", msg)
 
 	// replace race message array
 	a.CurrentRace.Text = msg.Messages
@@ -476,13 +476,13 @@ func (a *App) HandleChatDM(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 
 		return
 	}
 
-	a.logger.Info("[App]", "ChatDM\n")
-	a.logger.Info("[App]", "[CHAT] %+v\n", msg)
+	logger.Info("[App]", "ChatDM\n")
+	logger.Info("[App]", "[CHAT] %+v\n", msg)
 
 	// This message type doesn't matter
 }
@@ -498,13 +498,13 @@ func (a *App) HandleChatPin(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 
 		return
 	}
 
-	a.logger.Info("[App]", "ChatPin\n")
-	a.logger.Info("[App]", "[CHAT] %+v\n", msg)
+	logger.Info("[App]", "ChatPin\n")
+	logger.Info("[App]", "[CHAT] %+v\n", msg)
 
 	// handle pinning message to top of chat window
 	for i, m := range a.CurrentRace.Text {
@@ -532,13 +532,13 @@ func (a *App) HandleChatUnpin(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 
 		return
 	}
 
-	a.logger.Info("[App]", "ChatUnpin\n")
-	a.logger.Info("[App]", "[CHAT] %+v\n", msg)
+	logger.Info("[App]", "ChatUnpin\n")
+	logger.Info("[App]", "[CHAT] %+v\n", msg)
 
 	// handle unpinning message from the top of chat window
 	for i, m := range a.CurrentRace.Text {
@@ -573,15 +573,15 @@ func (a *App) HandleChatDelete(data []byte) {
 
 	err := json.Unmarshal(data, &env)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 
 		return
 	}
 
 	msg := env.Delete
 
-	a.logger.Info("[App]", "ChatDelete\n")
-	a.logger.Info("[App]", "[CHAT] %+v\n", msg)
+	logger.Info("[App]", "ChatDelete\n")
+	logger.Info("[App]", "[CHAT] %+v\n", msg)
 
 	for i, m := range a.CurrentRace.Text {
 		if m.ID == msg.ID {
@@ -611,15 +611,15 @@ func (a *App) HandleChatPurge(data []byte) {
 
 	err := json.Unmarshal(data, &env)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 
 		return
 	}
 
 	msg := env.Purge
 
-	a.logger.Info("[App]", "ChatPurge\n")
-	a.logger.Info("[App]", "[CHAT] %+v\n", msg)
+	logger.Info("[App]", "ChatPurge\n")
+	logger.Info("[App]", "[CHAT] %+v\n", msg)
 
 	filtered := a.CurrentRace.Text[:0]
 
@@ -651,20 +651,20 @@ func (a *App) HandleChatError(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 
 		return
 	}
 
-	a.logger.Info("[App]", "ChatError\n")
-	a.logger.Info("[App]", "[CHAT] %+v\n", msg)
+	logger.Info("[App]", "ChatError\n")
+	logger.Info("[App]", "[CHAT] %+v\n", msg)
 
 	// Do stuff depending on the errors
 	for _, msgError := range msg.Errors {
 		switch msgError {
 		case "You are not eligible to join this race.":
 			// Streaming required and twitch channel not linked (join   request_to_join   invite)
-			a.logger.Info("[App]", "User not eligible to join race")
+			logger.Info("[App]", "User not eligible to join race")
 			// Disable join button
 			runtime.EventsEmit(a.ctx, "joinEligibility", false)
 		case "Races cannot have more than 5 monitors.":
@@ -730,13 +730,13 @@ func (a *App) HandlePong(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 
 		return
 	}
 
-	a.logger.Info("[App]", "ChatPong\n")
-	a.logger.Info("[App]", "[CHAT] %+v\n", msg)
+	logger.Info("[App]", "ChatPong\n")
+	logger.Info("[App]", "[CHAT] %+v\n", msg)
 }
 
 type RaceDataMessage struct {
@@ -804,16 +804,16 @@ func (a *App) HandleRaceData(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		a.logger.Error("[App]", "chat decode error: %v", err)
+		logger.Error("[App]", "chat decode error: %v", err)
 
 		return
 	}
 
-	a.logger.Info("[App]", "[RACE] %+v\n", msg)
+	logger.Info("[App]", "[RACE] %+v\n", msg)
 
 	race := msg.Race
 
-	a.logger.Info("[App]",
+	logger.Info("[App]",
 		"race update status=%s entrants=%d finished=%d",
 		race.Status.State,
 		race.EntrantsCount,
@@ -828,7 +828,7 @@ func (a *App) HandleRaceData(data []byte) {
 	if race.StartDelay != "" {
 		dur, err := duration.FromString(race.StartDelay)
 		if err != nil {
-			a.logger.Error("[App]", "failed to parse start_delay:", err)
+			logger.Error("[App]", "failed to parse start_delay:", err)
 		} else {
 			delay = dur.ToDuration()
 		}
@@ -867,10 +867,10 @@ func (a *App) HandleRaceData(data []byte) {
 	a.CurrentRace.Entrants = race.Entrants
 
 	if previousStatus != "in_progress" && a.CurrentRace.Status == "in_progress" {
-		a.logger.Info("[App]", "race transitioned to in_progress")
+		logger.Info("[App]", "race transitioned to in_progress")
 
 		if a.engine != nil {
-			a.logger.Info("[App]", "Sending OpenSplit split command")
+			logger.Info("[App]", "Sending OpenSplit split command")
 			a.engine.Split()
 		}
 	}
@@ -893,7 +893,7 @@ func (a *App) HandleRenders(data []byte) {
 
 // true for forfeit; false for unforfeit
 func (a *App) Forfeit(state bool) {
-	a.logger.Info("[App]", "Forfeit status changed!")
+	logger.Info("[App]", "Forfeit status changed!")
 	// if forfeited unforfeit otherwise forfeit
 	a.engine.CLEAR_RUNTIME_OFFSET()
 	if state {
@@ -907,7 +907,7 @@ func (a *App) Forfeit(state bool) {
 
 // true for done; false for undone
 func (a *App) Done(state bool) {
-	a.logger.Info("[App]", "Done status changed!")
+	logger.Info("[App]", "Done status changed!")
 	a.engine.CLEAR_RUNTIME_OFFSET()
 	if state {
 		a.engine.Done()
@@ -920,7 +920,7 @@ func (a *App) Done(state bool) {
 
 // true for ready; false for unready
 func (a *App) Ready(state bool) {
-	a.logger.Info("[App]", "Ready status changed!")
+	logger.Info("[App]", "Ready status changed!")
 	a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
 	if state {
 		a.SendText(".ready", a.generateGUID())
@@ -931,7 +931,7 @@ func (a *App) Ready(state bool) {
 
 // true for join; false for leave
 func (a *App) Join(state bool) {
-	a.logger.Info("[App]", "Join status changed!")
+	logger.Info("[App]", "Join status changed!")
 	if state {
 		a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
 		a.SendText(".join", a.generateGUID())
@@ -984,7 +984,7 @@ func (a *App) WebSocketConnection(raceURL string) error {
 	// https://github.com/racetimeGG/racetime-app/wiki/Category-bots
 
 	a.authenticatedRaceURL = socketUrl + "/ws/o/race/" + strings.Split(raceURL, "/")[2] + "?token=" + a.Token.AccessToken
-	a.logger.Info("connecting websocket: %s", a.authenticatedRaceURL)
+	logger.Info("connecting websocket: %s", a.authenticatedRaceURL)
 
 	conn, _, err := websocket.Dial(
 		a.ctx,
@@ -1007,7 +1007,7 @@ func (a *App) WebSocketConnection(raceURL string) error {
 
 func (a *App) DisconnectRace() {
 	if a.racetimeWS != nil {
-		a.logger.Info("[App]", "disconnecting websocket")
+		logger.Info("[App]", "disconnecting websocket")
 		a.racetimeWS.Close(websocket.StatusNormalClosure, "leaving race")
 		a.racetimeWS = nil
 	}
@@ -1020,7 +1020,7 @@ func (a *App) Send(v any) error {
 		return err
 	}
 
-	a.logger.Debug("sending websocket message: %s", string(data))
+	logger.Debug("sending websocket message: %s", string(data))
 
 	select {
 	case a.writeCh <- data:
@@ -1035,13 +1035,13 @@ func (a *App) Send(v any) error {
 func (a *App) writeRoutine() {
 	for {
 		if a.racetimeWS == nil {
-			a.logger.Info("[App]", "websocket connection is nil")
+			logger.Info("[App]", "websocket connection is nil")
 			return
 		}
 
 		select {
 		case msg := <-a.writeCh:
-			a.logger.Debug("ws write: %s", string(msg))
+			logger.Debug("ws write: %s", string(msg))
 
 			writeCtx, cancel := context.WithTimeout(
 				a.ctx,
@@ -1057,7 +1057,7 @@ func (a *App) writeRoutine() {
 			cancel()
 
 			if err != nil {
-				a.logger.Error("[App]", "write error:", err)
+				logger.Error("[App]", "write error:", err)
 				// c.cancel()
 				return
 			}
@@ -1074,13 +1074,13 @@ func (a *App) readRoutine() {
 
 	for {
 		if a.racetimeWS == nil {
-			a.logger.Info("[App]", "websocket connection is nil")
+			logger.Info("[App]", "websocket connection is nil")
 			return
 		}
 
 		_, data, err := a.racetimeWS.Read(a.ctx)
 		if err != nil {
-			a.logger.Error("[App]", "read error:", err)
+			logger.Error("[App]", "read error:", err)
 			return
 		}
 
@@ -1088,16 +1088,16 @@ func (a *App) readRoutine() {
 
 		err = json.Unmarshal(data, &base)
 		if err != nil {
-			a.logger.Error("[App]", "invalid json:", err)
+			logger.Error("[App]", "invalid json:", err)
 			continue
 		}
 
-		a.logger.Debug("ws read raw: %s", string(data))
-		a.logger.Debug("ws message type: %s", base.Type)
+		logger.Debug("ws read raw: %s", string(data))
+		logger.Debug("ws message type: %s", base.Type)
 
 		handler, ok := a.handlers[base.Type]
 		if !ok {
-			a.logger.Warn("unknown websocket message type: %s", base.Type)
+			logger.Warn("unknown websocket message type: %s", base.Type)
 			continue
 		}
 
@@ -1114,7 +1114,7 @@ func (a *App) pingRoutine() {
 		select {
 		case <-ticker.C:
 			if a.racetimeWS == nil {
-				a.logger.Info("[App]", "websocket connection is nil")
+				logger.Info("[App]", "websocket connection is nil")
 				return
 			}
 
@@ -1126,11 +1126,11 @@ func (a *App) pingRoutine() {
 			cancel()
 
 			if err != nil {
-				a.logger.Error("[App]", "ping failed:", err)
+				logger.Error("[App]", "ping failed:", err)
 				return
 			}
 
-			a.logger.Info("[App]", "ping sent")
+			logger.Info("[App]", "ping sent")
 		case <-a.ctx.Done():
 			return
 		}
@@ -1151,21 +1151,21 @@ func (a *App) GenTokens() {
 	tok, err := a.conf.Exchange(ctx, a.authCode, oauth2.VerifierOption(a.verifier))
 
 	if err != nil {
-		a.logger.Error("[App]", "Generate Token Error: %v.\n", err)
+		logger.Error("[App]", "Generate Token Error: %v.\n", err)
 	}
 
 	a.Token = tok
 
 	// TODO: Remove debug statements
-	a.logger.Info("[App]",
+	logger.Info("[App]",
 		"token refreshed access_expiry=%s refresh_present=%v",
 		a.Token.Expiry.Format(time.RFC3339),
 		a.Token.RefreshToken != "",
 	)
-	a.logger.Debug("[App]", "Access token: %s\n", a.Token.AccessToken)
-	a.logger.Debug("[App]", "Refresh token: %s\n", a.Token.RefreshToken)
-	a.logger.Debug("[App]", "Token type: %s\n", a.Token.TokenType)
-	a.logger.Debug("[App]", "Access token expires: %v\n", a.Token.ExpiresIn)
+	logger.Debug("[App]", "Access token: %s\n", a.Token.AccessToken)
+	logger.Debug("[App]", "Refresh token: %s\n", a.Token.RefreshToken)
+	logger.Debug("[App]", "Token type: %s\n", a.Token.TokenType)
+	logger.Debug("[App]", "Access token expires: %v\n", a.Token.ExpiresIn)
 
 	securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
 }
@@ -1179,7 +1179,7 @@ func (a *App) refreshTokens() error {
 
 	tok, err := ts.Token()
 	if err != nil {
-		a.logger.Error("[App]", "refresh failed:", err)
+		logger.Error("[App]", "refresh failed:", err)
 
 		errStr := strings.ToLower(err.Error())
 
@@ -1197,15 +1197,15 @@ func (a *App) refreshTokens() error {
 
 	a.Token = tok
 
-	a.logger.Debug("[App]", "Access token: %s\n", a.Token.AccessToken)
-	a.logger.Debug("[App]", "Refresh token: %s\n", a.Token.RefreshToken)
-	a.logger.Debug("[App]", "Token type: %s\n", a.Token.TokenType)
-	a.logger.Debug("[App]", "Access token expires: %s\n", a.Token.Expiry)
-	a.logger.Debug("[App]", "Access token expires: %v\n", a.Token.ExpiresIn)
+	logger.Debug("[App]", "Access token: %s\n", a.Token.AccessToken)
+	logger.Debug("[App]", "Refresh token: %s\n", a.Token.RefreshToken)
+	logger.Debug("[App]", "Token type: %s\n", a.Token.TokenType)
+	logger.Debug("[App]", "Access token expires: %s\n", a.Token.Expiry)
+	logger.Debug("[App]", "Access token expires: %v\n", a.Token.ExpiresIn)
 
 	err = securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
 	if err != nil {
-		a.logger.Error("[App]", "failed to save refreshed token:", err)
+		logger.Error("[App]", "failed to save refreshed token:", err)
 		return err
 	}
 
@@ -1213,19 +1213,19 @@ func (a *App) refreshTokens() error {
 }
 
 func (a *App) CheckTokens() string {
-	a.logger.Info("[App]", "CheckTokens called")
+	logger.Info("[App]", "CheckTokens called")
 
 	if a.Token == nil {
-		a.logger.Info("[App]", "Token is nil")
+		logger.Info("[App]", "Token is nil")
 		return ""
 	}
 
 	if a.Token.Valid() {
-		a.logger.Info("[App]", "Token valid")
+		logger.Info("[App]", "Token valid")
 		return a.getAccessToken()
 	}
 
-	a.logger.Info("[App]", "Token expired, refreshing")
+	logger.Info("[App]", "Token expired, refreshing")
 
 	// Access token expired
 
@@ -1256,14 +1256,14 @@ func (a *App) getAccessToken() (accessToken string) {
 }
 
 func (a *App) invalidateAuth(reason string) {
-	a.logger.Info("authentication invalid:", reason)
+	logger.Info("authentication invalid:", reason)
 
 	a.Token = nil
 
 	// Remove encrypted token file
 	err := securestore.DeleteToken("token.enc")
 	if err != nil {
-		a.logger.Error("[App]", "failed to delete token:", err)
+		logger.Error("[App]", "failed to delete token:", err)
 	}
 
 	// Notify frontend
@@ -1298,7 +1298,7 @@ func (a *App) getUserInfo() {
 		panic(err)
 	}
 
-	a.logger.Info("[App]", "%+v\n", user)
+	logger.Info("[App]", "%+v\n", user)
 
 	a.User = user
 
