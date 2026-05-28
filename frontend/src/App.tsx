@@ -10,14 +10,30 @@ import ButtonList, { ButtonData } from "./components/ButtonList"
 
 const DEBUG = true;
 
+const APP_COMPONENT = "APP";
+
 function logApp(message: string, ...args: any[]) {
     if (!DEBUG) return;
 
-    console.log(`[APP] ${message}`, ...args);
+    console.log(`[INFO] ${APP_COMPONENT}: ${message}`, ...args);
 }
 
-function logAppError(message: string, error: unknown) {
-    console.error(`[APP] ${message}`, error);
+function logAppDebug(message: string, ...args: any[]) {
+    if (!DEBUG) return;
+
+    console.debug(`[DEBUG] ${APP_COMPONENT}: ${message}`, ...args);
+}
+
+function logAppInfo(message: string, ...args: any[]) {
+    console.warn(`[INFO] ${APP_COMPONENT}: ${message}`, ...args);
+}
+
+function logAppWarn(message: string, ...args: any[]) {
+    console.warn(`[WARN] ${APP_COMPONENT}: ${message}`, ...args);
+}
+
+function logAppError(message: string, error?: unknown, ...args: any[]) {
+    console.error(`[ERROR] ${APP_COMPONENT}: ${message}`, error, ...args);
 }
 
 enum ConnectionStatus {
@@ -303,12 +319,28 @@ function App() {
     }
 
     const handleSend = async () => {
-        if (!textEntry.trim()) return;
+        if (!textEntry.trim()) {
+            logAppWarn("attempted to send empty message");
+            return;
+        }
 
         const id = crypto.randomUUID();
-        logApp("sending chat message length=%d", textEntry.length);
-        await racetime.SendText(textEntry, id);
-        setTextEntry("");
+
+        try {
+            logAppDebug(
+                "sending chat message id=%s length=%d",
+                id,
+                textEntry.length,
+            );
+
+            await racetime.SendText(textEntry, id);
+
+            logApp("chat message sent successfully");
+
+            setTextEntry("");
+        } catch (err) {
+            logAppError("SendText failed", err);
+        }
     };
 
     const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -377,7 +409,7 @@ function App() {
     // Chat updated
     useEffect(() => {
         const newChatText = EventsOn("chatUpdated", (chatText: ChatMessage[]) => {
-            logApp("chat updated messages=%d", chatText.length);
+            logAppDebug("chat updated messages=%d", chatText.length);
             const shouldAutoScroll = isAtBottom();
 
             setRaceInfo((prev) => {
@@ -427,7 +459,7 @@ function App() {
     useEffect(() => {
         const newEntrants = EventsOn("entrantsUpdated", (entrantList: Entrant[]) => {
             setEntrantList(entrantList)
-            logApp("entrants updated count=%d", entrantList.length);
+            logAppDebug("entrants updated count=%d", entrantList.length);
         })
         return () => {
             newEntrants();
@@ -448,7 +480,7 @@ function App() {
     // Gets tokens from backend
     useEffect(() => {
         // call backend function to get token
-        logApp("checking stored auth token");
+        logAppInfo("checking stored auth token");
         (
             async () => {
                 const raceToken = await racetime.CheckTokens()
@@ -461,17 +493,17 @@ function App() {
     // Gets list of races
     useEffect(() => {
         if (token == "") {
-            logApp("race polling skipped: token missing");
+            logAppWarn("race polling skipped: token missing");
             return
         }
 
         if (race != "") {
-            logApp("race polling stopped: race joined");
+            logAppWarn("race polling stopped: race joined");
             return
         }
 
         const fetchRaces = async () => {
-            logApp("fetching race list");
+            logAppDebug("fetching race list");
             //local dev
             // const raceObj = await RaceList("http://localhost:8000")
             //live
@@ -490,7 +522,7 @@ function App() {
     }, [token, race])
 
     useEffect(() => {
-        logApp("setting window size");
+        logAppDebug("setting window size");
 
         WindowSetSize(320, 580);
     }, []);
@@ -577,10 +609,17 @@ function App() {
                     <ButtonList
                         data={raceList}
                         onClick={async (item) => {
-                            logApp("joining websocket race=%s", item.URL);
-                            // console.log("Clicked", item);
-                            setJoinedRace(item.URL)
-                            await racetime.WebSocketConnection(item.URL)
+                            try {
+                                logApp("joining websocket race=%s", item.URL);
+
+                                setJoinedRace(item.URL);
+
+                                await racetime.WebSocketConnection(item.URL);
+
+                                logApp("websocket connected race=%s", item.URL);
+                            } catch (err) {
+                                logAppError("failed to connect websocket", err);
+                            }
                         }}
                     />
                 </div>

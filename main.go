@@ -2,8 +2,9 @@ package main
 
 import (
 	"embed"
-	"log"
+	"opensplit-racetimegg/logging"
 	"opensplit-racetimegg/securestore"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -14,10 +15,9 @@ import (
 var assets embed.FS
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
-
+	logger := logging.NewLogger(os.Getenv("DEBUG") == "1")
 	// Create an instance of the app structure
-	app := NewApp()
+	app := NewApp(logger)
 
 	// TODO: switch to environment variable
 	// app.encryptionKey = securestore.KeyFromEnv(os.Getenv("RACETIME_KEY"))
@@ -42,6 +42,6 @@ func main() {
 	})
 
 	if err != nil {
-		println("Error:", err.Error())
+		logger.Error("Error:", err.Error())
 	}
 }

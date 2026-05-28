@@ -3,14 +3,24 @@ import { Authorize, GenTokens } from "../../wailsjs/go/main/App";
 
 const DEBUG = true;
 
-function logRT(message: string, ...args: any[]) {
-    if (!DEBUG) return;
+const COMPONENT = "RACETIME";
 
-    console.log(`[RACETIME] ${message}`, ...args);
+function logRT(message: string, ...args: any[]) {
+    console.log(`[INFO] ${COMPONENT}: ${message}`, ...args);
 }
 
-function logRTError(message: string, error: unknown) {
-    console.error(`[RACETIME] ${message}`, error);
+function logRTDebug(message: string, ...args: any[]) {
+    if (!DEBUG) return;
+
+    console.debug(`[DEBUG] ${COMPONENT}: ${message}`, ...args);
+}
+
+function logRTWarn(message: string, ...args: any[]) {
+    console.warn(`[WARN] ${COMPONENT}: ${message}`, ...args);
+}
+
+function logRTError(message: string, error?: unknown, ...args: any[]) {
+    console.error(`[ERROR] ${COMPONENT}: ${message}`, error, ...args);
 }
 
 function formatElapsed(ms: number): string {
@@ -30,27 +40,42 @@ function formatElapsed(ms: number): string {
 // Get list of races to be displayed
 export async function RaceList(restUrl: string) {
     try {
-        logRT("fetching race list from %s", restUrl);
+        logRTDebug("fetching race list from %s", restUrl);
 
         const response = await fetch(restUrl + "/races/data");
-        logRT("race list response status=%d", response.status)
+
+        logRTDebug(
+            "race list response status=%d ok=%s",
+            response.status,
+            response.ok,
+        );
+
+        if (!response.ok) {
+            throw new Error(`unexpected status code ${response.status}`);
+        }
 
         // Read x-date-exact header from response
         const exactHeader = response.headers.get("x-date-exact");
 
         if (!exactHeader) {
+            logRTWarn("missing x-date-exact header");
+
             throw new Error("missing x-date-exact header");
         }
 
         const serverTime = new Date(exactHeader);
-        logRT("server time=%s", serverTime.toISOString());
 
-        const json = await response.json();   // parse JSON
-        logRT("received %d races", json.races.length);
+        logRTDebug("server time=%s", serverTime.toISOString());
+
+        const json = await response.json();
+
+        logRT(
+            "received race list count=%d",
+            json.races?.length ?? 0,
+        );
 
         // Populate buttons with races
-        const DATA: ButtonData[] = [
-        ];
+        const DATA: ButtonData[] = [];
 
         for (let index = 0; index < json.races.length; index++) {
             const race = json.races[index];
@@ -80,8 +105,8 @@ export async function RaceList(restUrl: string) {
                 runTime = formatElapsed(elapsedMs);
             }
 
-            logRT(
-                "race category=%s url=%s entrants=%d finished=%d status=%s startedAt=%s",
+            logRTDebug(
+                "race category=%s url=%s entrants=%d finished=%d status=%s startedAt=%s runtime=%s",
                 categoryName,
                 URL,
                 entrantCount,
@@ -94,13 +119,27 @@ export async function RaceList(restUrl: string) {
             DATA.push({
                 id: index.toString(),
                 URL: URL,
-                label: "[" + runTime + "] " + " (" + URL + ") " + categoryName + " - " + goal + " (" + entrantFinishedCount + "/" + entrantCount + " Finished)"
+                label:
+                    "[" + runTime + "] " +
+                    " (" + URL + ") " +
+                    categoryName +
+                    " - " +
+                    goal +
+                    " (" +
+                    entrantFinishedCount +
+                    "/" +
+                    entrantCount +
+                    " Finished)",
             });
         }
 
-        return DATA
+        logRT("race list built count=%d", DATA.length);
+
+        return DATA;
     } catch (err) {
         logRTError("RaceList failed", err);
+
+        return [];
     }
 }
 
@@ -110,11 +149,15 @@ export async function LoginWithOAuth() {
         logRT("starting oauth flow");
 
         await Authorize();
+
         logRT("oauth authorization complete");
 
         await GenTokens();
+
         logRT("token generation complete");
     } catch (error) {
         logRTError("OAuth login failed", error);
+
+        throw error;
     }
 }
