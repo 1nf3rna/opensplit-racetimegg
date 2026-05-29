@@ -1,27 +1,8 @@
-import { ButtonData } from "./ButtonList"
+import { ButtonData } from "./ButtonList";
+import { moduleLogger } from "./logger";
 import { Authorize, GenTokens } from "../../wailsjs/go/main/App";
 
-const DEBUG = true;
-
-const COMPONENT = "RACETIME";
-
-function logRT(message: string, ...args: any[]) {
-    console.log(`[INFO] ${COMPONENT}: ${message}`, ...args);
-}
-
-function logRTDebug(message: string, ...args: any[]) {
-    if (!DEBUG) return;
-
-    console.debug(`[DEBUG] ${COMPONENT}: ${message}`, ...args);
-}
-
-function logRTWarn(message: string, ...args: any[]) {
-    console.warn(`[WARN] ${COMPONENT}: ${message}`, ...args);
-}
-
-function logRTError(message: string, error?: unknown, ...args: any[]) {
-    console.error(`[ERROR] ${COMPONENT}: ${message}`, error, ...args);
-}
+const log = moduleLogger("RACETIME");
 
 function formatElapsed(ms: number): string {
     const totalSeconds = Math.floor(ms / 1000);
@@ -40,38 +21,39 @@ function formatElapsed(ms: number): string {
 // Get list of races to be displayed
 export async function RaceList(restUrl: string) {
     try {
-        logRTDebug("fetching race list from %s", restUrl);
+        log.debug(`fetching race list from ${restUrl}`);
 
-        const response = await fetch(restUrl + "/races/data");
+        const response = await fetch(`${restUrl}/races/data`);
 
-        logRTDebug(
-            "race list response status=%d ok=%s",
-            response.status,
-            response.ok,
+        log.debug(
+            `race list response status=${response.status} ok=${response.ok}`,
         );
 
         if (!response.ok) {
-            throw new Error(`unexpected status code ${response.status}`);
+            throw new Error(
+                `unexpected status code ${response.status}`,
+            );
         }
 
         // Read x-date-exact header from response
         const exactHeader = response.headers.get("x-date-exact");
 
         if (!exactHeader) {
-            logRTWarn("missing x-date-exact header");
+            log.warn("missing x-date-exact header");
 
             throw new Error("missing x-date-exact header");
         }
 
         const serverTime = new Date(exactHeader);
 
-        logRTDebug("server time=%s", serverTime.toISOString());
+        log.debug(
+            `server time=${serverTime.toISOString()}`,
+        );
 
         const json = await response.json();
 
-        logRT(
-            "received race list count=%d",
-            json.races?.length ?? 0,
+        log.info(
+            `received race list count=${json.races?.length ?? 0}`,
         );
 
         // Populate buttons with races
@@ -83,7 +65,8 @@ export async function RaceList(restUrl: string) {
             const categoryName = race.category.name;
             const URL = race.url;
             const entrantCount = race.entrants_count;
-            const entrantFinishedCount = race.entrants_count_finished;
+            const entrantFinishedCount =
+                race.entrants_count_finished;
             const goal = race.goal.name;
             const status = race.status.value;
 
@@ -105,39 +88,33 @@ export async function RaceList(restUrl: string) {
                 runTime = formatElapsed(elapsedMs);
             }
 
-            logRTDebug(
-                "race category=%s url=%s entrants=%d finished=%d status=%s startedAt=%s runtime=%s",
-                categoryName,
-                URL,
-                entrantCount,
-                entrantFinishedCount,
-                status,
-                startedAt?.toISOString(),
-                runTime,
+            log.debug(
+                `race category=${categoryName} ` +
+                `url=${URL} ` +
+                `entrants=${entrantCount} ` +
+                `finished=${entrantFinishedCount} ` +
+                `status=${status} ` +
+                `startedAt=${startedAt?.toISOString()} ` +
+                `runtime=${runTime}`,
             );
 
             DATA.push({
                 id: index.toString(),
-                URL: URL,
+                URL,
                 label:
-                    "[" + runTime + "] " +
-                    " (" + URL + ") " +
-                    categoryName +
-                    " - " +
-                    goal +
-                    " (" +
-                    entrantFinishedCount +
-                    "/" +
-                    entrantCount +
-                    " Finished)",
+                    `[${runTime}] ` +
+                    `(${URL}) ` +
+                    `${categoryName} - ` +
+                    `${goal} ` +
+                    `(${entrantFinishedCount}/${entrantCount} Finished)`,
             });
         }
 
-        logRT("race list built count=%d", DATA.length);
+        log.info(`race list built count=${DATA.length}`);
 
         return DATA;
     } catch (err) {
-        logRTError("RaceList failed", err);
+        log.error("RaceList failed", err);
 
         return [];
     }
@@ -146,17 +123,17 @@ export async function RaceList(restUrl: string) {
 // Authenticate and get user tokens
 export async function LoginWithOAuth() {
     try {
-        logRT("starting oauth flow");
+        log.info("starting oauth flow");
 
         await Authorize();
 
-        logRT("oauth authorization complete");
+        log.info("oauth authorization complete");
 
         await GenTokens();
 
-        logRT("token generation complete");
+        log.info("token generation complete");
     } catch (error) {
-        logRTError("OAuth login failed", error);
+        log.error("OAuth login failed", error);
 
         throw error;
     }

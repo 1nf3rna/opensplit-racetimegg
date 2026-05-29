@@ -5,36 +5,11 @@ import disconnected from './assets/images/broadcast_icon_disconnected.png';
 import './App.css';
 import * as racetime from "../wailsjs/go/main/App";
 import { LoginWithOAuth, RaceList } from './components/racetime_gg';
-import { EventsOn, WindowSetSize } from "../wailsjs/runtime";
+import { EventsOn, LogError, LogInfo, WindowSetSize } from "../wailsjs/runtime";
 import ButtonList, { ButtonData } from "./components/ButtonList"
+import { moduleLogger } from "./components/logger";
 
-const DEBUG = true;
-
-const APP_COMPONENT = "APP";
-
-function logApp(message: string, ...args: any[]) {
-    if (!DEBUG) return;
-
-    console.log(`[INFO] ${APP_COMPONENT}: ${message}`, ...args);
-}
-
-function logAppDebug(message: string, ...args: any[]) {
-    if (!DEBUG) return;
-
-    console.debug(`[DEBUG] ${APP_COMPONENT}: ${message}`, ...args);
-}
-
-function logAppInfo(message: string, ...args: any[]) {
-    console.warn(`[INFO] ${APP_COMPONENT}: ${message}`, ...args);
-}
-
-function logAppWarn(message: string, ...args: any[]) {
-    console.warn(`[WARN] ${APP_COMPONENT}: ${message}`, ...args);
-}
-
-function logAppError(message: string, error?: unknown, ...args: any[]) {
-    console.error(`[ERROR] ${APP_COMPONENT}: ${message}`, error, ...args);
-}
+const log = moduleLogger("APP");
 
 enum ConnectionStatus {
     Disconnected = 0,
@@ -78,65 +53,64 @@ type RaceInfo = {
 }
 
 type ChatMessage = {
-    id: string                // "id": "<string>",
-    user: User                // "user": { <user info object> },
-    bot: string               // "bot": "<string>",
-    direct_to: User           // "direct_to": { <user info object> },
-    posted_at: string         // "posted_at": "<iso date string>"
-    message: string           // "message": "<string>",
-    message_plain: string     // "message_plain": "<string>",
-    highlight: boolean        // "highlight": <bool>,
-    is_dm: boolean            // "is_dm": <bool>,
-    is_bot: boolean           // "is_bot": <bool>,
-    is_system: boolean        // "is_system": <bool>,
-    is_pinned: boolean        // "is_pinned": <bool>,
-    delay: string             // "delay": "<iso duration string>",
-    //	    "actions" { <action objects> }
+    id: string
+    user: User
+    bot: string
+    direct_to: User
+    posted_at: string
+    message: string
+    message_plain: string
+    highlight: boolean
+    is_dm: boolean
+    is_bot: boolean
+    is_system: boolean
+    is_pinned: boolean
+    delay: string
 }
 
 type User = {
-    id: string              // "id": "fR42gLweew3pQlm4",
-    full_name: string       // "full_name": "Mario#5527",
-    name: string            // "name": "Mario",
-    discriminator: string   // "discriminator": "5527",
-    url: string             // "url": "/user/fR42gLweew3pQlm4",
-    avatar: string          // "avatar": "/media/mario.png",
-    pronouns: string        // "pronouns": "he/him",
-    flair: string           // "flair": "monitor supporter",
-    twitch_name: string     // "twitch_name": "ItsaMeMario",
-    twitch_channel: string  // "twitch_channel": "https://www.twitch.tv/itsamemario",
-    can_moderate: boolean   // "can_moderate": false
+    id: string
+    full_name: string
+    name: string
+    discriminator: string
+    url: string
+    avatar: string
+    pronouns: string
+    flair: string
+    twitch_name: string
+    twitch_channel: string
+    can_moderate: boolean
 }
 
 type Entrant = {
-    user: User                  // user: User data blob for this entrant.
-    value: UserStatus           // value: A machine-parsable status text.
-    verbose_value: string       // verbose_value: A user-parsable status text, e.g. "In progress".
-    help_text: string           // help_text: Describes the status, e.g. "Did not finish the race.".
-    finish_time: string         // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
-    finished_at: string         // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
-    place: number               // place: Integer indicating what position the user finished in.
-    place_ordinal: string       // place_ordinal: String ordinal version of place, e.g. "3rd".
-    score: number               // score: Integer amount of points earned by this entrant on the relevant leaderboard. Note that this is not the entrant's current score (unless the race is in progress), it is the score they had when they entered the race, not after.
-    score_change: number        // score_change Integer amount of points gained/lost as a result of this race, or null (not zero!) if race is not recorded.
-    comment: string             // comment: A string containing a pithy comeback supplied by the user post-race, or null if they have no comment. If hide_comments is true and the race has not concluded, this field is always null.
-    has_comment: boolean        // has_comment: A boolean indicating if the entrant has made a comment. This field is unaffected by the hide_comments setting.
-    stream_live: boolean        // stream_live: Boolean indicating if the user's stream is currently live. This is updated in real-time while a race is in progress, but once an entrant has finished, forfeited or been disqualified it will not be updated.
-    stream_override: boolean    // stream_override: Boolean indicating if a moderator overrode the streaming requirement for this race entrant,
+    user: User
+    value: UserStatus
+    verbose_value: string
+    help_text: string
+    finish_time: string
+    finished_at: string
+    place: number
+    place_ordinal: string
+    score: number
+    score_change: number
+    comment: string
+    has_comment: boolean
+    stream_live: boolean
+    stream_override: boolean
 }
 
 type UserStatus =
-    "requested"     // (requested to join)
-    | "invited"     // (invited to join)
-    | "declined"    // (declined invitation)
-    | "partitioned" // (moved to a 1v1 race room, only for 1v1 ladder races)
-    | "not_joined"  // default state (set on leave)
-    | "ready"       // only when joined before race start
-    | "not_ready"   // only when joined before race start
-    | "in_progress" // only when joined after race start
-    | "done"        // only when joined after race start
-    | "dnf"         // only when joined after race start (did not finish, i.e. forfeited)
-    | "dq"          // only when joined after race start (disqualified)
+    "requested"
+    | "invited"
+    | "declined"
+    | "partitioned"
+    | "not_joined"
+    | "ready"
+    | "not_ready"
+    | "in_progress"
+    | "done"
+    | "dnf"
+    | "dq"
 
 const disableStatuses = new Set<UserStatus>([
     "in_progress",
@@ -146,6 +120,8 @@ const disableStatuses = new Set<UserStatus>([
 ]);
 
 function App() {
+
+    log.debug("rendering app");
 
     const [token, setToken] = useState<string>("")
     const [raceList, setRaceList] = useState<ButtonData[]>([])
@@ -204,6 +180,8 @@ function App() {
     });
 
     useEffect(() => {
+        log.debug("processing unread tab state");
+
         const messages = raceInfo?.Text ?? [];
 
         const nextUnread = new Set(unreadTabs);
@@ -215,6 +193,10 @@ function App() {
                 message.user.id !== activeChatTab
             ) {
                 nextUnread.add(message.user.id);
+
+                log.debug(
+                    `marked unread dm tab user=${message.user.id}`,
+                );
             }
         }
 
@@ -224,15 +206,24 @@ function App() {
 
     const isAtBottom = () => {
         const el = chatRef.current;
-        if (!el) return true;
+
+        if (!el) {
+            log.debug("chat ref missing while checking scroll position");
+            return true;
+        }
 
         return el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     };
 
-    // track scroll position
     useEffect(() => {
+        log.debug("registering chat scroll listener");
+
         const el = chatRef.current;
-        if (!el) return;
+
+        if (!el) {
+            log.warn("chat ref unavailable for scroll listener");
+            return;
+        }
 
         const onScroll = () => {
             wasAtBottomRef.current =
@@ -240,15 +231,22 @@ function App() {
         };
 
         el.addEventListener("scroll", onScroll);
-        return () => el.removeEventListener("scroll", onScroll);
+
+        return () => {
+            log.debug("removing chat scroll listener");
+            el.removeEventListener("scroll", onScroll);
+        };
     }, []);
 
-    // auto-scroll only if user was already at bottom
     useLayoutEffect(() => {
         const el = chatRef.current;
-        if (!el) return;
+
+        if (!el) {
+            return;
+        }
 
         if (wasAtBottomRef.current) {
+            log.debug("auto-scrolling chat to bottom");
             el.scrollTop = el.scrollHeight;
         }
     }, [raceInfo?.Text]);
@@ -263,56 +261,64 @@ function App() {
         userInfo.TwitchName.trim() !== "";
 
     const handleJoinClick = async () => {
+        log.info(`join clicked visible=${joinVisible}`);
+
         await racetime.Join(joinVisible)
-        logApp("join toggled current=%s", joinVisible);
 
         if (joinVisible) {
-            // joining
-            setUserStatus("not_ready")
+            setUserStatus("not_ready");
+            log.info("user joined race");
         } else {
-            // leaving
-            setUserStatus("not_joined")
+            setUserStatus("not_joined");
+            log.info("user left race");
         }
 
         setJoinVisible(!joinVisible)
     }
 
     const handleReadyClick = async () => {
+        log.info(`ready clicked visible=${readyVisible}`);
+
         await racetime.Ready(readyVisible)
-        logApp("ready toggled current=%s", readyVisible);
 
         if (readyVisible) {
-            // becoming ready
-            setUserStatus("ready")
+            setUserStatus("ready");
+            log.info("user marked ready");
         } else {
-            // becoming unready
-            setUserStatus("not_ready")
+            setUserStatus("not_ready");
+            log.info("user marked unready");
         }
 
         setReadyVisible(!readyVisible)
     }
 
     const handleDoneClick = async () => {
+        log.info(`done clicked visible=${doneVisible}`);
+
         await racetime.Done(doneVisible)
-        logApp("done toggled current=%s", doneVisible);
 
         if (doneVisible) {
-            setUserStatus("done")
+            setUserStatus("done");
+            log.info("user marked done");
         } else {
-            setUserStatus("in_progress")
+            setUserStatus("in_progress");
+            log.info("user reverted done");
         }
 
         setDoneVisible(!doneVisible)
     }
 
     const handleForfeitClick = async () => {
+        log.info(`forfeit clicked visible=${forfeitVisible}`);
+
         await racetime.Forfeit(forfeitVisible)
-        logApp("forfeit toggled current=%s", forfeitVisible);
 
         if (forfeitVisible) {
-            setUserStatus("dnf")
+            setUserStatus("dnf");
+            log.warn("user forfeited");
         } else {
-            setUserStatus("in_progress")
+            setUserStatus("in_progress");
+            log.info("user unforfeited");
         }
 
         setForfeitVisible(!forfeitVisible)
@@ -320,31 +326,31 @@ function App() {
 
     const handleSend = async () => {
         if (!textEntry.trim()) {
-            logAppWarn("attempted to send empty message");
+            log.warn("attempted to send empty chat message");
             return;
         }
 
         const id = crypto.randomUUID();
 
         try {
-            logAppDebug(
-                "sending chat message id=%s length=%d",
-                id,
-                textEntry.length,
+            log.debug(
+                `sending chat message id=${id} length=${textEntry.length}`,
             );
 
             await racetime.SendText(textEntry, id);
 
-            logApp("chat message sent successfully");
+            log.info("chat message sent");
 
             setTextEntry("");
         } catch (err) {
-            logAppError("SendText failed", err);
+            log.error("SendText failed", err);
         }
     };
 
     const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const value = event.target.checked;
+
+        log.info(`hide results changed value=${value}`);
 
         await racetime.HideResults(value);
     };
@@ -363,17 +369,17 @@ function App() {
     };
 
     useEffect(() => {
+        log.info("subscribing to opensplit connection events");
+
         return EventsOn("opensplit:connection", (s: ConnectionState) => {
-            setOpenSplitConnection(s);
-            logApp(
-                "opensplit status=%d message=%s",
-                s.connection_status,
-                s.message,
+            log.info(
+                `opensplit connection updated status=${s.connection_status} message=${s.message}`,
             );
+
+            setOpenSplitConnection(s);
         });
     }, []);
 
-    // Sets user to in_progress or dq when race starts
     useEffect(() => {
         if (!raceInfo) return
 
@@ -385,35 +391,47 @@ function App() {
             raceStarted &&
             (userStatus === "ready" || userStatus === "not_ready")
         ) {
+            log.info(
+                `race transitioned to started state userStatus=${userStatus}`,
+            );
+
             if (userStatus === "ready") {
                 setUserStatus("in_progress")
             } else {
                 if (raceInfo.DisqualifyUnready) {
+                    log.warn("user disqualified for not being ready");
                     setUserStatus("dq")
                 }
             }
         }
     }, [raceInfo?.StatusVerbose])
 
-    // User can join race
     useEffect(() => {
+        log.info("subscribing to join eligibility events");
+
         const eligibilityEvent = EventsOn("joinEligibility", (eligible: boolean) => {
+            log.info(`join eligibility updated eligible=${eligible}`);
+
             setCanJoin(eligible)
         })
 
         return () => {
+            log.debug("unsubscribing from join eligibility events");
             eligibilityEvent()
         }
     }, [])
 
-    // Chat updated
     useEffect(() => {
+        log.info("subscribing to chat update events");
+
         const newChatText = EventsOn("chatUpdated", (chatText: ChatMessage[]) => {
-            logAppDebug("chat updated messages=%d", chatText.length);
+            log.debug(`chat updated messages=${chatText.length}`);
+
             const shouldAutoScroll = isAtBottom();
 
             setRaceInfo((prev) => {
                 if (!prev) return prev;
+
                 return { ...prev, Text: chatText };
             });
 
@@ -421,52 +439,63 @@ function App() {
         });
 
         return () => {
+            log.debug("unsubscribing from chat update events");
             newChatText();
         };
     }, []);
 
-    // UserInfo updated
     useEffect(() => {
+        log.info("subscribing to user info events");
+
         const newUserInfo = EventsOn("userInfo", (userInfo: UserInfo) => {
-            setUserInfo(userInfo)
-            logApp(
-                "user info updated user=%s twitchLinked=%s",
-                userInfo.Name,
-                userInfo.TwitchName !== "",
+            log.info(
+                `user info updated user=${userInfo.Name} twitchLinked=${userInfo.TwitchName !== ""}`,
             );
+
+            setUserInfo(userInfo)
         })
+
         return () => {
+            log.debug("unsubscribing from user info events");
             newUserInfo();
         };
     }, []);
 
-    // RaceInfo updated
     useEffect(() => {
+        log.info("subscribing to race state events");
+
         const newRaceState = EventsOn("raceStateUpdated", (currentRace: RaceInfo) => {
-            setRaceInfo(currentRace)
-            logApp(
-                "race updated goal=%s entrants=%d",
-                currentRace.Goal,
-                currentRace.EntrantCount,
+            log.info(
+                `race updated goal=${currentRace.Goal} entrants=${currentRace.EntrantCount}`,
             );
+
+            setRaceInfo(currentRace)
         })
+
         return () => {
+            log.debug("unsubscribing from race state events");
             newRaceState();
         };
     }, []);
 
-    // Entrants updated
     useEffect(() => {
+        log.info("subscribing to entrant update events");
+
         const newEntrants = EventsOn("entrantsUpdated", (entrantList: Entrant[]) => {
+            log.debug(`entrants updated count=${entrantList.length}`);
+
             setEntrantList(entrantList)
-            logAppDebug("entrants updated count=%d", entrantList.length);
         })
+
         return () => {
+            log.debug("unsubscribing from entrant update events");
             newEntrants();
         };
     }, []);
 
     useEffect(() => {
+        log.debug("syncing entrant list into race info");
+
         setRaceInfo((prev) => {
             if (!prev) return prev
 
@@ -477,39 +506,41 @@ function App() {
         })
     }, [entrantList])
 
-    // Gets tokens from backend
     useEffect(() => {
-        // call backend function to get token
-        logAppInfo("checking stored auth token");
+        log.info("checking stored auth token");
+
         (
             async () => {
                 const raceToken = await racetime.CheckTokens()
+
                 setToken(raceToken)
-                logApp("token check complete present=%s", raceToken !== "");
+
+                log.info(`token check complete present=${raceToken !== ""}`);
             }
         )()
     }, [])
 
-    // Gets list of races
     useEffect(() => {
         if (token == "") {
-            logAppWarn("race polling skipped: token missing");
+            log.warn("race polling skipped token missing");
             return
         }
 
         if (race != "") {
-            logAppWarn("race polling stopped: race joined");
+            log.warn(`race polling stopped activeRace=${race}`);
             return
         }
 
         const fetchRaces = async () => {
-            logAppDebug("fetching race list");
-            //local dev
-            // const raceObj = await RaceList("http://localhost:8000")
-            //live
+            log.debug("fetching race list");
+
             const raceObj = await RaceList("https://racetime.gg")
+
             setRaceList(raceObj ?? [])
-            logApp("race list updated count=%d", raceObj?.length ?? 0);
+
+            log.info(
+                `race list updated count=${raceObj?.length ?? 0}`,
+            );
         }
 
         fetchRaces()
@@ -518,11 +549,14 @@ function App() {
             fetchRaces()
         }, 5000)
 
-        return () => clearInterval(intervalId)
+        return () => {
+            log.debug("stopping race polling interval");
+            clearInterval(intervalId)
+        }
     }, [token, race])
 
     useEffect(() => {
-        logAppDebug("setting window size");
+        log.info("setting initial window size");
 
         WindowSetSize(320, 580);
     }, []);
@@ -610,15 +644,15 @@ function App() {
                         data={raceList}
                         onClick={async (item) => {
                             try {
-                                logApp("joining websocket race=%s", item.URL);
+                                LogInfo(`joining websocket race=${item.URL}`);
 
                                 setJoinedRace(item.URL);
 
                                 await racetime.WebSocketConnection(item.URL);
 
-                                logApp("websocket connected race=%s", item.URL);
+                                LogInfo(`websocket connected race=${item.URL}`);
                             } catch (err) {
-                                logAppError("failed to connect websocket", err);
+                                LogError(`failed to connect websocket: ${err}`);
                             }
                         }}
                     />
@@ -660,7 +694,7 @@ function App() {
                     </div>
                     <button
                         onClick={async () => {
-                            logApp("disconnecting from race");
+                            LogInfo(`disconnecting from race`);
                             await racetime.Join(false)
                             await racetime.DisconnectRace()
 

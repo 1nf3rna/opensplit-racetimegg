@@ -1,24 +1,6 @@
-const DEBUG = true;
+import { moduleLogger } from "./logger";
 
-const COMPONENT = "BUTTONS";
-
-function logButtons(message: string, ...args: any[]) {
-  console.log(`[INFO] ${COMPONENT}: ${message}`, ...args);
-}
-
-function logButtonsDebug(message: string, ...args: any[]) {
-  if (!DEBUG) return;
-
-  console.debug(`[DEBUG] ${COMPONENT}: ${message}`, ...args);
-}
-
-function logButtonsWarn(message: string, ...args: any[]) {
-  console.warn(`[WARN] ${COMPONENT}: ${message}`, ...args);
-}
-
-function logButtonsError(message: string, error?: unknown, ...args: any[]) {
-  console.error(`[ERROR] ${COMPONENT}: ${message}`, error, ...args);
-}
+const log = moduleLogger("BUTTONS");
 
 export type ButtonData = {
   id: string;
@@ -35,8 +17,12 @@ type Props = {
   className?: string;
 };
 
-export default function ButtonList({ data, onClick, className }: Props) {
-  logButtonsDebug("rendering button list count=%d", data.length);
+export default function ButtonList({
+  data,
+  onClick,
+  className,
+}: Props) {
+  log.debug(`rendering button list count=${data.length}`);
 
   return (
     <div className={className} role="group" aria-label="button list">
@@ -48,18 +34,10 @@ export default function ButtonList({ data, onClick, className }: Props) {
           title={item.title}
           disabled={item.disabled}
           onClick={() => {
-            logButtons(
-              "button clicked id=%s disabled=%s label=%s",
-              item.id,
-              item.disabled,
-              item.label,
-            );
+            log.info(`button clicked id=${item.id}`);
 
             if (item.disabled) {
-              logButtonsWarn(
-                "blocked click for disabled button id=%s",
-                item.id,
-              );
+              log.warn(`blocked click for disabled button id=${item.id}`,);
 
               return;
             }
@@ -67,16 +45,9 @@ export default function ButtonList({ data, onClick, className }: Props) {
             try {
               onClick?.(item);
 
-              logButtonsDebug(
-                "button handler executed id=%s",
-                item.id,
-              );
+              log.debug(`button handler executed id=${item.id}`,);
             } catch (error) {
-              logButtonsError(
-                "button handler failed id=%s",
-                error,
-                item.id,
-              );
+              log.error(`button handler failed id=${item.id}`, error,);
             }
           }}
         >
