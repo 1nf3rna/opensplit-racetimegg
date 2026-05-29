@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"opensplit-racetimegg/logging"
+	"opensplit-racetimegg/logger"
 	"opensplit-racetimegg/processing"
 	"opensplit-racetimegg/securestore"
 
@@ -20,6 +20,8 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/oauth2"
 )
+
+var log = logger.Module("app").SetLevel(logger.ErrorLevel)
 
 // // OAUTH_REDIRECT_ADDRESS
 // 127.0.0.1
@@ -50,9 +52,9 @@ import (
 const socketUrl = "wss://racetime.gg"
 const WebRaceServer = "https://racetime.gg"
 
-const component = "App"
+// const component = "App"
 
-var logger = logging.NewLogger(true)
+// var logger = logging.NewLogger(true)
 
 // type RaceState int
 
@@ -211,20 +213,18 @@ type App struct {
 	osConnectionCh       chan bool
 }
 
-func NewApp() *App {
-	engine, connCh := processing.NewEngine()
+func NewApp() (*App, error) {
+	engine, connCh, err := processing.NewEngine()
+	if err != nil {
+		return nil, err
+	}
 
 	client := &App{
 		verifier: oauth2.GenerateVerifier(),
 		conf: &oauth2.Config{
-			// local dev
-			// ClientID:     "x4oiff8OAiWwtfQUboFhFlYfgmDMHmxduOFOQgve",
-			// ClientSecret: "1BYxBFqyO495W8VCYiZxAEXgortlLa5trpzY0xxDHNAuAWaqfxhgy4435Gq5yp6P76Hw1EIFdp8JjnKvDtDfzLZ2lo6D1TrrWlp0yNbmBTPpNxYVePSqE7eX72ZDAmaU",
-			// Live racetime.gg
 			ClientID:     "ILLY5XtgStv8Z3hsQNg8nvWg2f16y4Uau38MwBgD",
 			ClientSecret: "pLvZfhr7NvcpQwJ5IkVvzgYqGh8WqVWcvmtiMCmy15jFhINotEcfjlkUb6L0WM7tYkt4aNjooyFGRsPo8GjBG0rDcewk40sMWbgnlbL67VnTCKWoVupGd5eJbx2gbQbW",
 			Scopes:       []string{"read", "chat_message", "race_action"},
-			// RedirectURL:  RestProtocol + "://" + RedirectURL + "/callback",
 			Endpoint: oauth2.Endpoint{
 				AuthURL:  WebRaceServer + "/o/authorize",
 				TokenURL: WebRaceServer + "/o/token",
@@ -235,9 +235,9 @@ func NewApp() *App {
 		engine:         engine,
 		osConnectionCh: connCh,
 	}
+
 	client.CurrentRace.DisplayResults = true
 
-	// Register handlers
 	client.handlers["chat.message"] = client.HandleChatMessage
 	client.handlers["chat.history"] = client.HandleChatHistory
 	client.handlers["chat.dm"] = client.HandleChatDM
@@ -250,7 +250,7 @@ func NewApp() *App {
 	client.handlers["race.data"] = client.HandleRaceData
 	client.handlers["race.renders"] = client.HandleRenders
 
-	return client
+	return client, nil
 }
 
 // startup is called when the app starts. The context is saved
@@ -286,11 +286,11 @@ func (a *App) startup(ctx context.Context) {
 
 			switch ev.Command {
 			case processing.DONE:
-				logger.Info("[App]", "opensplit DONE event received")
+				log.Info("opensplit DONE event received")
 				a.SendText(".done", a.generateGUID())
 
 			case processing.UNDONE:
-				logger.Info("[App]", "opensplit UNDONE event received")
+				log.Info("opensplit UNDONE event received")
 				a.SendText(".undone", a.generateGUID())
 			}
 		}
@@ -306,7 +306,7 @@ func (a *App) Authorize() {
 
 	codeChan := make(chan string)
 
-	logger.Info("AuthURL: %v", url)
+	log.Info("AuthURL: %v", url)
 
 	server := &http.Server{
 		Addr: ":9999",
@@ -324,7 +324,7 @@ func (a *App) Authorize() {
 
 	a.authCode = <-codeChan
 
-	logger.Info("AuthURL: %v", a.authCode)
+	log.Info("AuthURL: %v", a.authCode)
 
 	server.Shutdown(a.ctx)
 }
@@ -343,7 +343,7 @@ type MessageData struct {
 }
 
 func (a *App) SendText(text string, GUID string) {
-	logger.Debug("[App]", "SendText called")
+	log.Debug("SendText called")
 
 	a.Send(MessageDataEnvelope{
 		Action: "message",
@@ -412,14 +412,14 @@ func (a *App) HandleChatMessage(data []byte) {
 
 	err := json.Unmarshal(data, &env)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 		return
 	}
 
 	msg := env.Message
 
-	logger.Info("[App]", "ChatMessage\n")
-	logger.Info("[App]", "[CHAT] %+v\n", msg)
+	log.Info("ChatMessage\n")
+	log.Info("[CHAT] %+v\n", msg)
 
 	// ignore duplicate messages
 	for _, m := range a.CurrentRace.Text {
@@ -448,13 +448,13 @@ func (a *App) HandleChatHistory(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 
 		return
 	}
 
-	logger.Info("[App]", "ChatHistory\n")
-	logger.Info("[App]", "[CHAT] %+v\n", msg)
+	log.Info("ChatHistory\n")
+	log.Info("[CHAT] %+v\n", msg)
 
 	// replace race message array
 	a.CurrentRace.Text = msg.Messages
@@ -476,13 +476,13 @@ func (a *App) HandleChatDM(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 
 		return
 	}
 
-	logger.Info("[App]", "ChatDM\n")
-	logger.Info("[App]", "[CHAT] %+v\n", msg)
+	log.Info("ChatDM\n")
+	log.Info("[CHAT] %+v\n", msg)
 
 	// This message type doesn't matter
 }
@@ -498,13 +498,13 @@ func (a *App) HandleChatPin(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 
 		return
 	}
 
-	logger.Info("[App]", "ChatPin\n")
-	logger.Info("[App]", "[CHAT] %+v\n", msg)
+	log.Info("ChatPin\n")
+	log.Info("[CHAT] %+v\n", msg)
 
 	// handle pinning message to top of chat window
 	for i, m := range a.CurrentRace.Text {
@@ -532,13 +532,13 @@ func (a *App) HandleChatUnpin(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 
 		return
 	}
 
-	logger.Info("[App]", "ChatUnpin\n")
-	logger.Info("[App]", "[CHAT] %+v\n", msg)
+	log.Info("ChatUnpin\n")
+	log.Info("[CHAT] %+v\n", msg)
 
 	// handle unpinning message from the top of chat window
 	for i, m := range a.CurrentRace.Text {
@@ -573,15 +573,15 @@ func (a *App) HandleChatDelete(data []byte) {
 
 	err := json.Unmarshal(data, &env)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 
 		return
 	}
 
 	msg := env.Delete
 
-	logger.Info("[App]", "ChatDelete\n")
-	logger.Info("[App]", "[CHAT] %+v\n", msg)
+	log.Info("ChatDelete\n")
+	log.Info("[CHAT] %+v\n", msg)
 
 	for i, m := range a.CurrentRace.Text {
 		if m.ID == msg.ID {
@@ -611,15 +611,15 @@ func (a *App) HandleChatPurge(data []byte) {
 
 	err := json.Unmarshal(data, &env)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 
 		return
 	}
 
 	msg := env.Purge
 
-	logger.Info("[App]", "ChatPurge\n")
-	logger.Info("[App]", "[CHAT] %+v\n", msg)
+	log.Info("ChatPurge\n")
+	log.Info("[CHAT] %+v\n", msg)
 
 	filtered := a.CurrentRace.Text[:0]
 
@@ -651,20 +651,20 @@ func (a *App) HandleChatError(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 
 		return
 	}
 
-	logger.Info("[App]", "ChatError\n")
-	logger.Info("[App]", "[CHAT] %+v\n", msg)
+	log.Info("ChatError\n")
+	log.Info("[CHAT] %+v\n", msg)
 
 	// Do stuff depending on the errors
 	for _, msgError := range msg.Errors {
 		switch msgError {
 		case "You are not eligible to join this race.":
 			// Streaming required and twitch channel not linked (join   request_to_join   invite)
-			logger.Info("[App]", "User not eligible to join race")
+			log.Info("User not eligible to join race")
 			// Disable join button
 			runtime.EventsEmit(a.ctx, "joinEligibility", false)
 		case "Races cannot have more than 5 monitors.":
@@ -730,13 +730,13 @@ func (a *App) HandlePong(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 
 		return
 	}
 
-	logger.Info("[App]", "ChatPong\n")
-	logger.Info("[App]", "[CHAT] %+v\n", msg)
+	log.Info("ChatPong\n")
+	log.Info("[CHAT] %+v\n", msg)
 }
 
 type RaceDataMessage struct {
@@ -804,16 +804,16 @@ func (a *App) HandleRaceData(data []byte) {
 
 	err := json.Unmarshal(data, &msg)
 	if err != nil {
-		logger.Error("[App]", "chat decode error: %v", err)
+		log.Error("chat decode error: %v", err)
 
 		return
 	}
 
-	logger.Info("[App]", "[RACE] %+v\n", msg)
+	log.Info("[RACE] %+v\n", msg)
 
 	race := msg.Race
 
-	logger.Info("[App]",
+	log.Info(
 		"race update status=%s entrants=%d finished=%d",
 		race.Status.State,
 		race.EntrantsCount,
@@ -828,7 +828,7 @@ func (a *App) HandleRaceData(data []byte) {
 	if race.StartDelay != "" {
 		dur, err := duration.FromString(race.StartDelay)
 		if err != nil {
-			logger.Error("[App]", "failed to parse start_delay:", err)
+			log.Error("failed to parse start_delay:", err)
 		} else {
 			delay = dur.ToDuration()
 		}
@@ -867,10 +867,10 @@ func (a *App) HandleRaceData(data []byte) {
 	a.CurrentRace.Entrants = race.Entrants
 
 	if previousStatus != "in_progress" && a.CurrentRace.Status == "in_progress" {
-		logger.Info("[App]", "race transitioned to in_progress")
+		log.Info("race transitioned to in_progress")
 
 		if a.engine != nil {
-			logger.Info("[App]", "Sending OpenSplit split command")
+			log.Info("Sending OpenSplit split command")
 			a.engine.Split()
 		}
 	}
@@ -893,7 +893,7 @@ func (a *App) HandleRenders(data []byte) {
 
 // true for forfeit; false for unforfeit
 func (a *App) Forfeit(state bool) {
-	logger.Info("[App]", "Forfeit status changed!")
+	log.Info("Forfeit status changed!")
 	// if forfeited unforfeit otherwise forfeit
 	a.engine.CLEAR_RUNTIME_OFFSET()
 	if state {
@@ -907,7 +907,7 @@ func (a *App) Forfeit(state bool) {
 
 // true for done; false for undone
 func (a *App) Done(state bool) {
-	logger.Info("[App]", "Done status changed!")
+	log.Info("Done status changed!")
 	a.engine.CLEAR_RUNTIME_OFFSET()
 	if state {
 		a.engine.Done()
@@ -920,7 +920,7 @@ func (a *App) Done(state bool) {
 
 // true for ready; false for unready
 func (a *App) Ready(state bool) {
-	logger.Info("[App]", "Ready status changed!")
+	log.Info("Ready status changed!")
 	a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
 	if state {
 		a.SendText(".ready", a.generateGUID())
@@ -931,7 +931,7 @@ func (a *App) Ready(state bool) {
 
 // true for join; false for leave
 func (a *App) Join(state bool) {
-	logger.Info("[App]", "Join status changed!")
+	log.Info("Join status changed!")
 	if state {
 		a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
 		a.SendText(".join", a.generateGUID())
@@ -984,7 +984,7 @@ func (a *App) WebSocketConnection(raceURL string) error {
 	// https://github.com/racetimeGG/racetime-app/wiki/Category-bots
 
 	a.authenticatedRaceURL = socketUrl + "/ws/o/race/" + strings.Split(raceURL, "/")[2] + "?token=" + a.Token.AccessToken
-	logger.Info("connecting websocket: %s", a.authenticatedRaceURL)
+	log.Info("connecting websocket: %s", a.authenticatedRaceURL)
 
 	conn, _, err := websocket.Dial(
 		a.ctx,
@@ -1007,7 +1007,7 @@ func (a *App) WebSocketConnection(raceURL string) error {
 
 func (a *App) DisconnectRace() {
 	if a.racetimeWS != nil {
-		logger.Info("[App]", "disconnecting websocket")
+		log.Info("disconnecting websocket")
 		a.racetimeWS.Close(websocket.StatusNormalClosure, "leaving race")
 		a.racetimeWS = nil
 	}
@@ -1020,7 +1020,7 @@ func (a *App) Send(v any) error {
 		return err
 	}
 
-	logger.Debug("sending websocket message: %s", string(data))
+	log.Debug("sending websocket message: %s", string(data))
 
 	select {
 	case a.writeCh <- data:
@@ -1035,13 +1035,13 @@ func (a *App) Send(v any) error {
 func (a *App) writeRoutine() {
 	for {
 		if a.racetimeWS == nil {
-			logger.Info("[App]", "websocket connection is nil")
+			log.Info("websocket connection is nil")
 			return
 		}
 
 		select {
 		case msg := <-a.writeCh:
-			logger.Debug("ws write: %s", string(msg))
+			log.Debug("ws write: %s", string(msg))
 
 			writeCtx, cancel := context.WithTimeout(
 				a.ctx,
@@ -1057,7 +1057,7 @@ func (a *App) writeRoutine() {
 			cancel()
 
 			if err != nil {
-				logger.Error("[App]", "write error:", err)
+				log.Error("write error:", err)
 				// c.cancel()
 				return
 			}
@@ -1074,13 +1074,13 @@ func (a *App) readRoutine() {
 
 	for {
 		if a.racetimeWS == nil {
-			logger.Info("[App]", "websocket connection is nil")
+			log.Info("websocket connection is nil")
 			return
 		}
 
 		_, data, err := a.racetimeWS.Read(a.ctx)
 		if err != nil {
-			logger.Error("[App]", "read error:", err)
+			log.Error("read error:", err)
 			return
 		}
 
@@ -1088,16 +1088,16 @@ func (a *App) readRoutine() {
 
 		err = json.Unmarshal(data, &base)
 		if err != nil {
-			logger.Error("[App]", "invalid json:", err)
+			log.Error("invalid json:", err)
 			continue
 		}
 
-		logger.Debug("ws read raw: %s", string(data))
-		logger.Debug("ws message type: %s", base.Type)
+		log.Debug("ws read raw: %s", string(data))
+		log.Debug("ws message type: %s", base.Type)
 
 		handler, ok := a.handlers[base.Type]
 		if !ok {
-			logger.Warn("unknown websocket message type: %s", base.Type)
+			log.Warn("unknown websocket message type: %s", base.Type)
 			continue
 		}
 
@@ -1114,7 +1114,7 @@ func (a *App) pingRoutine() {
 		select {
 		case <-ticker.C:
 			if a.racetimeWS == nil {
-				logger.Info("[App]", "websocket connection is nil")
+				log.Info("websocket connection is nil")
 				return
 			}
 
@@ -1126,11 +1126,11 @@ func (a *App) pingRoutine() {
 			cancel()
 
 			if err != nil {
-				logger.Error("[App]", "ping failed:", err)
+				log.Error("ping failed:", err)
 				return
 			}
 
-			logger.Info("[App]", "ping sent")
+			log.Info("ping sent")
 		case <-a.ctx.Done():
 			return
 		}
@@ -1151,21 +1151,21 @@ func (a *App) GenTokens() {
 	tok, err := a.conf.Exchange(ctx, a.authCode, oauth2.VerifierOption(a.verifier))
 
 	if err != nil {
-		logger.Error("[App]", "Generate Token Error: %v.\n", err)
+		log.Error("Generate Token Error: %v.\n", err)
 	}
 
 	a.Token = tok
 
 	// TODO: Remove debug statements
-	logger.Info("[App]",
+	log.Info(
 		"token refreshed access_expiry=%s refresh_present=%v",
 		a.Token.Expiry.Format(time.RFC3339),
 		a.Token.RefreshToken != "",
 	)
-	logger.Debug("[App]", "Access token: %s\n", a.Token.AccessToken)
-	logger.Debug("[App]", "Refresh token: %s\n", a.Token.RefreshToken)
-	logger.Debug("[App]", "Token type: %s\n", a.Token.TokenType)
-	logger.Debug("[App]", "Access token expires: %v\n", a.Token.ExpiresIn)
+	log.Debug("Access token: %s\n", a.Token.AccessToken)
+	log.Debug("Refresh token: %s\n", a.Token.RefreshToken)
+	log.Debug("Token type: %s\n", a.Token.TokenType)
+	log.Debug("Access token expires: %v\n", a.Token.ExpiresIn)
 
 	securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
 }
@@ -1179,7 +1179,7 @@ func (a *App) refreshTokens() error {
 
 	tok, err := ts.Token()
 	if err != nil {
-		logger.Error("[App]", "refresh failed:", err)
+		log.Error("refresh failed:", err)
 
 		errStr := strings.ToLower(err.Error())
 
@@ -1197,15 +1197,15 @@ func (a *App) refreshTokens() error {
 
 	a.Token = tok
 
-	logger.Debug("[App]", "Access token: %s\n", a.Token.AccessToken)
-	logger.Debug("[App]", "Refresh token: %s\n", a.Token.RefreshToken)
-	logger.Debug("[App]", "Token type: %s\n", a.Token.TokenType)
-	logger.Debug("[App]", "Access token expires: %s\n", a.Token.Expiry)
-	logger.Debug("[App]", "Access token expires: %v\n", a.Token.ExpiresIn)
+	log.Debug("Access token: %s\n", a.Token.AccessToken)
+	log.Debug("Refresh token: %s\n", a.Token.RefreshToken)
+	log.Debug("Token type: %s\n", a.Token.TokenType)
+	log.Debug("Access token expires: %s\n", a.Token.Expiry)
+	log.Debug("Access token expires: %v\n", a.Token.ExpiresIn)
 
 	err = securestore.SaveToken("token.enc", *a.Token, a.encryptionKey)
 	if err != nil {
-		logger.Error("[App]", "failed to save refreshed token:", err)
+		log.Error("failed to save refreshed token:", err)
 		return err
 	}
 
@@ -1213,19 +1213,19 @@ func (a *App) refreshTokens() error {
 }
 
 func (a *App) CheckTokens() string {
-	logger.Info("[App]", "CheckTokens called")
+	log.Info("CheckTokens called")
 
 	if a.Token == nil {
-		logger.Info("[App]", "Token is nil")
+		log.Info("Token is nil")
 		return ""
 	}
 
 	if a.Token.Valid() {
-		logger.Info("[App]", "Token valid")
+		log.Info("Token valid")
 		return a.getAccessToken()
 	}
 
-	logger.Info("[App]", "Token expired, refreshing")
+	log.Info("Token expired, refreshing")
 
 	// Access token expired
 
@@ -1256,14 +1256,14 @@ func (a *App) getAccessToken() (accessToken string) {
 }
 
 func (a *App) invalidateAuth(reason string) {
-	logger.Info("authentication invalid:", reason)
+	log.Info("authentication invalid:", reason)
 
 	a.Token = nil
 
 	// Remove encrypted token file
 	err := securestore.DeleteToken("token.enc")
 	if err != nil {
-		logger.Error("[App]", "failed to delete token:", err)
+		log.Error("failed to delete token:", err)
 	}
 
 	// Notify frontend
@@ -1298,7 +1298,7 @@ func (a *App) getUserInfo() {
 		panic(err)
 	}
 
-	logger.Info("[App]", "%+v\n", user)
+	log.Info("%+v\n", user)
 
 	a.User = user
 

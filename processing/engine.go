@@ -4,11 +4,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"opensplit-racetimegg/logger"
 	"sync"
 	"time"
-
-	"opensplit-racetimegg/logging"
 )
+
+var log = logger.Module("processing/engine").SetLevel(logger.ErrorLevel)
 
 type Command byte
 
@@ -39,10 +40,6 @@ type Event struct {
 	Command Command
 }
 
-const component = "ENGINE"
-
-var logger = logging.NewLogger(true)
-
 type Engine struct {
 	m                    sync.Mutex
 	conn                 net.PacketConn
@@ -51,21 +48,22 @@ type Engine struct {
 	opensplitConnectedCh chan bool
 	events               chan Event
 	lastHelloAck         time.Time
+	done                 chan struct{}
 }
 
-func NewEngine() (*Engine, chan bool) {
-	logger.Info(component, "creating engine")
+func NewEngine() (*Engine, chan bool, error) {
+	log.Info("creating engine")
 
 	conn, err := net.ListenPacket("udp", ":0")
 	if err != nil {
-		logger.Error(component, "failed to create UDP listener: %v", err)
-		panic(err)
+		log.Error("failed to create UDP listener: %v", err)
+		return nil, nil, err
 	}
 
 	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:6767")
 	if err != nil {
-		logger.Error(component, "failed to resolve OpenSplit address: %v", err)
-		panic(err)
+		log.Error("failed to resolve OpenSplit address: %v", err)
+		return nil, nil, err
 	}
 
 	e := &Engine{
@@ -74,120 +72,138 @@ func NewEngine() (*Engine, chan bool) {
 		osAddr:               addr,
 		opensplitConnectedCh: make(chan bool),
 		events:               make(chan Event, 32),
+		done:                 make(chan struct{}),
 	}
 
-	logger.Info(component, "starting read loop")
+	log.Info("starting read loop")
 
 	go e.readLoop()
 
 	go func() {
-		logger.Debug(component, "starting HELLO heartbeat loop")
+		log.Debug("starting HELLO heartbeat loop")
 
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			e.Hello()
+		for {
+			select {
+			case <-ticker.C:
+				e.Hello()
 
-			connected := time.Since(e.lastHelloAck) < 3*time.Second
-			e.updateConnectionStatus(connected)
+				e.m.Lock()
+				lastAck := e.lastHelloAck
+				e.m.Unlock()
+
+				connected := time.Since(lastAck) < 3*time.Second
+				e.updateConnectionStatus(connected)
+
+			case <-e.done:
+				log.Info("heartbeat loop stopped")
+				return
+			}
 		}
 	}()
 
-	return e, e.opensplitConnectedCh
+	return e, e.opensplitConnectedCh, nil
 }
 
 func (e *Engine) readLoop() {
-	logger.Info(component, "read loop started")
+	log.Info("read loop started")
 
 	buf := make([]byte, 1024)
 
 	for {
-		if e.conn == nil {
-			logger.Warn(component, "connection is nil, exiting read loop")
+		select {
+		case <-e.done:
+			log.Info("read loop stopped")
+			return
+		default:
+		}
+
+		e.m.Lock()
+		conn := e.conn
+		e.m.Unlock()
+
+		if conn == nil {
+			log.Warn("connection is nil, exiting read loop")
 			return
 		}
 
-		_ = e.conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+		_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 
-		n, _, err := e.conn.ReadFrom(buf)
+		n, _, err := conn.ReadFrom(buf)
 		if err != nil {
-			// timeout
 			if ne, ok := err.(net.Error); ok && ne.Timeout() {
 				continue
 			}
 
-			logger.Error(component, "ReadFrom failed: %v", err)
+			log.Error("ReadFrom failed: %v", err)
 			continue
 		}
 
-		logger.Debug(component, "received packet (%d bytes)", n)
+		log.Debug("received packet (%d bytes)", n)
 
-		// minimum packet size
 		if n < 7 {
-			logger.Warn(component, "received undersized packet (%d bytes)", n)
+			log.Warn("received undersized packet (%d bytes)", n)
 			continue
 		}
 
-		// magic
-		if buf[0] != 'O' ||
-			buf[1] != 'S' ||
-			buf[2] != 'R' ||
-			buf[3] != 'C' {
-			logger.Warn(component, "received packet with invalid magic bytes")
+		if buf[0] != 'O' || buf[1] != 'S' || buf[2] != 'R' || buf[3] != 'C' {
+			log.Warn("received packet with invalid magic bytes")
 			continue
 		}
 
 		cmd := Command(buf[6])
 
-		logger.Info(component, "received command=%s", commandName(cmd))
+		log.Debug("received command=%s", commandName(cmd))
 
 		switch cmd {
-
-		// HELLO ACK
 		case HELLO:
+			e.m.Lock()
 			e.lastHelloAck = time.Now()
+			e.m.Unlock()
 
-			logger.Debug(component, "received HELLO ACK")
+			log.Debug("received HELLO ACK")
 
-		// OpenSplit emitted DONE
 		case DONE:
-			logger.Debug(component, "queueing DONE event")
-
+			log.Debug("queueing DONE event")
 			select {
 			case e.events <- Event{Command: DONE}:
 			default:
-				logger.Warn(component, "event queue full, dropping DONE event")
+				log.Warn("event queue full, dropping DONE event")
 			}
 
-		// OpenSplit emitted UNDONE
 		case UNDONE:
-			logger.Debug(component, "queueing UNDONE event")
-
+			log.Debug("queueing UNDONE event")
 			select {
 			case e.events <- Event{Command: UNDONE}:
 			default:
-				logger.Warn(component, "event queue full, dropping UNDONE event")
+				log.Warn("event queue full, dropping UNDONE event")
 			}
 		}
 	}
 }
 
 func (e *Engine) Close() {
-	logger.Info(component, "closing engine")
+	log.Info("closing engine")
+
+	close(e.done) // 👈 signal all goroutines to stop
 
 	e.updateConnectionStatus(false)
 
-	if e.conn != nil {
-		err := e.conn.Close()
+	e.m.Lock()
+	conn := e.conn
+	e.conn = nil
+	e.m.Unlock()
+
+	if conn != nil {
+		err := conn.Close()
 		if err != nil {
-			logger.Error(component, "failed to close UDP connection: %v", err)
+			log.Error("failed to close UDP connection: %v", err)
 		}
 	}
 
-	e.conn = nil
-
-	logger.Info(component, "engine closed")
+	log.Info("engine closed")
 }
 
 func (e *Engine) Events() <-chan Event {
@@ -201,8 +217,7 @@ func (e *Engine) OpenSplitConnected() bool {
 func (e *Engine) SET_RUNTIME_OFFSET(delay int64) bool {
 	packet := buildRCPacket(SET_RUNTIME_OFFSET, &delay, false)
 
-	logger.Info(
-		component,
+	log.Debug(
 		"sending command=%s delay=%d",
 		commandName(SET_RUNTIME_OFFSET),
 		delay,
@@ -213,7 +228,7 @@ func (e *Engine) SET_RUNTIME_OFFSET(delay int64) bool {
 
 	_, err := e.conn.WriteTo(packet, e.osAddr)
 	if err != nil {
-		logger.Error(component, "WriteTo failed: %v", err)
+		log.Error("WriteTo failed: %v", err)
 		return false
 	}
 
@@ -225,14 +240,14 @@ func (e *Engine) CLEAR_RUNTIME_OFFSET() bool {
 
 	packet := buildRCPacket(CLEAR_RUNTIME_OFFSET, &payload, false)
 
-	logger.Info(component, "sending command=%s", commandName(CLEAR_RUNTIME_OFFSET))
+	log.Debug("sending command=%s", commandName(CLEAR_RUNTIME_OFFSET))
 
 	e.m.Lock()
 	defer e.m.Unlock()
 
 	_, err := e.conn.WriteTo(packet, e.osAddr)
 	if err != nil {
-		logger.Error(component, "WriteTo failed: %v", err)
+		log.Error("WriteTo failed: %v", err)
 		return false
 	}
 
@@ -242,14 +257,14 @@ func (e *Engine) CLEAR_RUNTIME_OFFSET() bool {
 func (e *Engine) UnDone() bool {
 	packet := buildRCPacket(UNDONE, nil, false)
 
-	logger.Info(component, "sending command=%s", commandName(UNDONE))
+	log.Debug("sending command=%s", commandName(UNDONE))
 
 	e.m.Lock()
 	defer e.m.Unlock()
 
 	_, err := e.conn.WriteTo(packet, e.osAddr)
 	if err != nil {
-		logger.Error(component, "WriteTo failed: %v", err)
+		log.Error("WriteTo failed: %v", err)
 		return false
 	}
 
@@ -259,14 +274,14 @@ func (e *Engine) UnDone() bool {
 func (e *Engine) Done() bool {
 	packet := buildRCPacket(DONE, nil, false)
 
-	logger.Info(component, "sending command=%s", commandName(DONE))
+	log.Debug("sending command=%s", commandName(DONE))
 
 	e.m.Lock()
 	defer e.m.Unlock()
 
 	_, err := e.conn.WriteTo(packet, e.osAddr)
 	if err != nil {
-		logger.Error(component, "WriteTo failed: %v", err)
+		log.Error("WriteTo failed: %v", err)
 		return false
 	}
 
@@ -276,14 +291,14 @@ func (e *Engine) Done() bool {
 func (e *Engine) Split() bool {
 	packet := buildRCPacket(SPLIT, nil, false)
 
-	logger.Info(component, "sending command=%s", commandName(SPLIT))
+	log.Debug("sending command=%s", commandName(SPLIT))
 
 	e.m.Lock()
 	defer e.m.Unlock()
 
 	_, err := e.conn.WriteTo(packet, e.osAddr)
 	if err != nil {
-		logger.Error(component, "WriteTo failed: %v", err)
+		log.Error("WriteTo failed: %v", err)
 		return false
 	}
 
@@ -293,14 +308,14 @@ func (e *Engine) Split() bool {
 func (e *Engine) Hello() bool {
 	packet := buildRCPacket(HELLO, nil, true)
 
-	logger.Debug(component, "sending command=%s", commandName(HELLO))
+	log.Debug("sending command=%s", commandName(HELLO))
 
 	e.m.Lock()
 	defer e.m.Unlock()
 
 	_, err := e.conn.WriteTo(packet, e.osAddr)
 	if err != nil {
-		logger.Error(component, "WriteTo failed: %v", err)
+		log.Error("WriteTo failed: %v", err)
 		return false
 	}
 
@@ -336,7 +351,7 @@ func buildRCPacket(command Command, payload *int64, requestAck bool) []byte {
 		// Little Endian (Least Significant Byte first)
 		binary.LittleEndian.PutUint64(bs, uint64(*payload))
 
-		logger.Debug(component, "encoded payload=%d bytes=%v", *payload, bs)
+		log.Debug("encoded payload=%d bytes=%v", *payload, bs)
 
 		packet[7] = bs[0]
 		packet[8] = bs[1]
@@ -353,7 +368,7 @@ func buildRCPacket(command Command, payload *int64, requestAck bool) []byte {
 
 func (e *Engine) updateConnectionStatus(status bool) {
 	if e.openSplitConnected != status {
-		logger.Info(component, "connection status changed connected=%v", status)
+		log.Info("connection status changed connected=%v", status)
 	}
 
 	e.openSplitConnected = status
@@ -361,7 +376,7 @@ func (e *Engine) updateConnectionStatus(status bool) {
 	select {
 	case e.opensplitConnectedCh <- e.openSplitConnected:
 	default:
-		logger.Warn(component, "connection status channel full, dropping update")
+		log.Warn("connection status channel full, dropping update")
 	}
 }
 

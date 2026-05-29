@@ -9,71 +9,68 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"opensplit-racetimegg/logger"
 	"os"
 	"time"
-
-	"opensplit-racetimegg/logging"
 
 	"golang.org/x/oauth2"
 )
 
-const component = "SECURESTORE"
-
-var logger = logging.NewLogger(true)
+var log = logger.Module("securestore/tokenstorage").SetLevel(logger.ErrorLevel)
 
 func encrypt(data []byte, key []byte) (string, error) {
-	logger.Debug(component, "encrypting token payload (%d bytes)", len(data))
+	log.Debug("encrypting token payload (%d bytes)", len(data))
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		logger.Error(component, "aes.NewCipher failed: %v", err)
+		log.Error("aes.NewCipher failed: %v", err)
 		return "", err
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		logger.Error(component, "cipher.NewGCM failed: %v", err)
+		log.Error("cipher.NewGCM failed: %v", err)
 		return "", err
 	}
 
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		logger.Error(component, "nonce generation failed: %v", err)
+		log.Error("nonce generation failed: %v", err)
 		return "", err
 	}
 
 	ciphertext := gcm.Seal(nonce, nonce, data, nil)
 
-	logger.Debug(component, "encryption successful")
+	log.Debug("encryption successful")
 
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
 func decrypt(enc string, key []byte) ([]byte, error) {
-	logger.Debug(component, "decrypting token payload")
+	log.Debug("decrypting token payload")
 
 	data, err := base64.StdEncoding.DecodeString(enc)
 	if err != nil {
-		logger.Error(component, "base64 decode failed: %v", err)
+		log.Error("base64 decode failed: %v", err)
 		return nil, err
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		logger.Error(component, "aes.NewCipher failed: %v", err)
+		log.Error("aes.NewCipher failed: %v", err)
 		return nil, err
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		logger.Error(component, "cipher.NewGCM failed: %v", err)
+		log.Error("cipher.NewGCM failed: %v", err)
 		return nil, err
 	}
 
 	nonceSize := gcm.NonceSize()
 	if len(data) < nonceSize {
 		err := errors.New("ciphertext too short")
-		logger.Error(component, "decrypt failed: %v", err)
+		log.Error("decrypt failed: %v", err)
 		return nil, err
 	}
 
@@ -81,18 +78,17 @@ func decrypt(enc string, key []byte) ([]byte, error) {
 
 	plain, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		logger.Error(component, "gcm.Open failed: %v", err)
+		log.Error("gcm.Open failed: %v", err)
 		return nil, err
 	}
 
-	logger.Debug(component, "decryption successful")
+	log.Debug("decryption successful")
 
 	return plain, nil
 }
 
 func SaveToken(path string, token oauth2.Token, key []byte) error {
-	logger.Info(
-		component,
+	log.Debug(
 		"saving token file path=%s expiry=%s refresh_present=%v",
 		path,
 		token.Expiry.Format(time.RFC3339),
@@ -101,51 +97,55 @@ func SaveToken(path string, token oauth2.Token, key []byte) error {
 
 	data, err := json.Marshal(token)
 	if err != nil {
-		logger.Error(component, "json.Marshal failed: %v", err)
+		log.Error("json.Marshal failed: %v", err)
 		return err
 	}
 
 	enc, err := encrypt(data, key)
 	if err != nil {
-		logger.Error(component, "encrypt failed: %v", err)
+		log.Error("encrypt failed: %v", err)
 		return err
 	}
 
 	err = os.WriteFile(path, []byte(enc), 0600)
 	if err != nil {
-		logger.Error(component, "WriteFile failed: %v", err)
+		log.Error("WriteFile failed: %v", err)
 		return err
 	}
 
-	logger.Info(component, "token saved successfully")
+	log.Info("token saved successfully")
 
 	return nil
 }
 
 func LoadToken(path string, key []byte) (*oauth2.Token, error) {
-	logger.Info(component, "loading token file path=%s", path)
+	log.Info("loading token file path=%s", path)
 
 	enc, err := os.ReadFile(path)
 	if err != nil {
-		logger.Error(component, "ReadFile failed: %v", err)
+		if errors.Is(err, os.ErrNotExist) {
+			log.Info("token file does not exist")
+		} else {
+			log.Error("ReadFile failed: %v", err)
+		}
+
 		return nil, err
 	}
 
 	data, err := decrypt(string(enc), key)
 	if err != nil {
-		logger.Error(component, "decrypt failed: %v", err)
+		log.Error("decrypt failed: %v", err)
 		return nil, err
 	}
 
 	var token oauth2.Token
 
 	if err := json.Unmarshal(data, &token); err != nil {
-		logger.Error(component, "json.Unmarshal failed: %v", err)
+		log.Error("json.Unmarshal failed: %v", err)
 		return nil, err
 	}
 
-	logger.Info(
-		component,
+	log.Debug(
 		"token loaded expiry=%s valid=%v refresh_present=%v",
 		token.Expiry.Format(time.RFC3339),
 		token.Valid(),
@@ -156,25 +156,30 @@ func LoadToken(path string, key []byte) (*oauth2.Token, error) {
 }
 
 func DeleteToken(path string) error {
-	logger.Info(component, "deleting token file path=%s", path)
+	log.Info("deleting token file path=%s", path)
 
 	err := os.Remove(path)
 	if err != nil {
-		logger.Error(component, "token delete failed: %v", err)
+		if errors.Is(err, os.ErrNotExist) {
+			log.Debug("token file already deleted")
+			return nil
+		}
+
+		log.Error("token delete failed: %v", err)
 		return err
 	}
 
-	logger.Info(component, "token deleted successfully")
+	log.Info("token deleted successfully")
 
 	return nil
 }
 
 func KeyFromEnv(secret string) []byte {
-	logger.Debug(component, "deriving encryption key from secret")
+	log.Debug("deriving encryption key from secret")
 
 	hash := sha256.Sum256([]byte(secret))
 
-	logger.Debug(component, "key derivation complete")
+	log.Debug("key derivation complete")
 
 	return hash[:]
 }
