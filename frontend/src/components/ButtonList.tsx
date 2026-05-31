@@ -25,7 +25,17 @@ export default function ButtonList({
   log.debug(`rendering button list count=${data.length}`);
 
   return (
-    <div className={className} role="group" aria-label="button list">
+    <div
+      className={className}
+      role="group"
+      aria-label="button list"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        width: "100%",
+        gap: "8px",
+      }}
+    >
       {data.map((item) => (
         <button
           key={item.id}
@@ -33,21 +43,20 @@ export default function ButtonList({
           id={`btn-${item.id}`}
           title={item.title}
           disabled={item.disabled}
+          style={{ width: "100%" }}
           onClick={() => {
             log.info(`button clicked id=${item.id}`);
 
             if (item.disabled) {
-              log.warn(`blocked click for disabled button id=${item.id}`,);
-
+              log.warn(`blocked click for disabled button id=${item.id}`);
               return;
             }
 
             try {
               onClick?.(item);
-
-              log.debug(`button handler executed id=${item.id}`,);
+              log.debug(`button handler executed id=${item.id}`);
             } catch (error) {
-              log.error(`button handler failed id=${item.id}`, error,);
+              log.error(`button handler failed id=${item.id}`, error);
             }
           }}
         >
