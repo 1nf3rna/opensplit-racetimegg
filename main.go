@@ -33,9 +33,11 @@ func main() {
 
 	// Create application with options
 	runErr := wails.Run(&options.App{
-		Title:  "opensplit-racetimegg",
-		Width:  1024,
-		Height: 768,
+		Title:     "opensplit-racetimegg",
+		Width:     1024,
+		Height:    768,
+		MinWidth:  900,
+		MinHeight: 580,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

@@ -62,7 +62,199 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    min-width: 75vw;
+    gap: 8px;
+    padding: 8px;
+    box-sizing: border-box;
+}
+
+.raceMain {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    gap: 8px;
+}
+
+.raceLeft {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.entrantPanel {
+    width: 250px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #444;
+    min-height: 0;
+}
+.raceInfoBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 0;
+}
+
+.raceInfoRow {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+}
+
+.raceInfoRow .label {
+    font-weight: bold;
+    opacity: 0.8;
+    min-width: 90px;
+}
+
+.raceInfoRow .value {
+    flex: 1;
+    text-align: left;
+}
+
+.raceHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
     width: 100%;
+}
+
+.raceHeaderLeft {
+    flex: 1;
+}
+
+.raceHeaderRight {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.backButton {
+    align-self: flex-end;
+}
+
+.raceTop {
+    display: flex;
+    width: 100%;
+    gap: 10px;
+}
+
+.raceTopLeft {
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+}
+
+.raceTopRight {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.backButton {
+    align-self: flex-end;
+}
+
+.raceStatusPanel {
+    text-align: right;
+}
+
+.timerDisplay {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.timerStatus {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.chatText a,
+.raceInfoRow a,
+.timerStatus a {
+    color: #4ea3ff;
+    text-decoration: underline;
+    cursor: pointer;
+    word-break: break-word;
+}
+
+.chatText a:hover,
+.raceInfoRow a:hover,
+.timerStatus a:hover {
+    color: #79c2ff;
+}
+
+.raceStatusPanel {
+    flex-shrink: 0;
+    border-bottom: 1px solid #444;
+    padding: 8px;
+}
+
+.timerDisplay {
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.timerStatus {
+    margin-top: 4px;
+    font-size: 12px;
+    text-align: center;
+    opacity: 0.8;
+}
+
+.entrantList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.entrantRow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.entrantSummary {
+    margin-top: 8px;
+    font-weight: bold;
+}
+
+.chatContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid #444;
+}
+
+.chatBox {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding: 8px;
+}
+
+.actionPanel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chatInputBar {
+    display: flex;
+    gap: 8px;
+}
+
+.chatInputBar input {
+    flex: 1;
 }
 
 .chatContainer {
@@ -70,6 +262,7 @@
     flex-direction: column;
     height: 300px;
     border: 1px solid #444;
+    text-align: left;
 }
 
 .chatTabs {
@@ -99,7 +292,7 @@
     padding: 8px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 1px;
 }
 /* .chatBox {
     flex: 1;
@@ -118,11 +311,13 @@
     box-sizing: border-box;
 } */
 
-.chatMeta {
-    font-size: 12px;
+.chatTimestamp {
     opacity: 0.7;
-    display: flex;
-    gap: 8px;
+    font-size: 12px;
+}
+
+.chatSender {
+    font-weight: bold;
 }
 
 .chatText {

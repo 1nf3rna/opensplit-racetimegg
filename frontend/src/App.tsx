@@ -29,7 +29,7 @@ type UserInfo = {
     Name: string
     Discriminator: string
     Avatar: string
-    TwitchName: string
+    twitch_name: string
     IsStaff: boolean
 }
 
@@ -39,6 +39,7 @@ type RaceInfo = {
     Game: string
     RaceID: string
     Info: string
+    StreamingRequired: boolean
     DisplayResults: boolean
     EntrantCount: number
     EntrantFinishedCount: number
@@ -47,9 +48,13 @@ type RaceInfo = {
     Text: ChatMessage[]
     Ranked: boolean
     AutoStart: boolean
+    Delay: number
+    Status: string
     StatusVerbose: string
     StatusHelpText: string
     DisqualifyUnready: boolean
+    EndedAt: string | null
+    CancelledAt: string | null
 }
 
 type ChatMessage = {
@@ -112,15 +117,7 @@ type UserStatus =
     | "dnf"
     | "dq"
 
-const disableStatuses = new Set<UserStatus>([
-    "in_progress",
-    "done",
-    "dnf",
-    "dq"
-]);
-
 function App() {
-
     log.debug("rendering app");
 
     const [token, setToken] = useState<string>("")
@@ -144,11 +141,40 @@ function App() {
             message: "Opensplit Not Found",
         });
 
+    const raceStarted = raceInfo?.Status === "in_progress"
     const joined = userStatus !== "not_joined"
 
-    const raceStarted = disableStatuses.has(userStatus)
+    const raceEndedOrCancelled = raceInfo?.EndedAt != null || raceInfo?.CancelledAt != null
+
+    const raceInProgress = raceInfo?.Status === "in_progress";
+
+    const hasTwitchName =
+        userInfo?.twitch_name != null &&
+        userInfo.twitch_name.trim() !== "";
+
+    const raceEnded = !!raceInfo?.EndedAt || !!raceInfo?.CancelledAt
+
+    const raceLocked = raceInProgress || raceEnded
 
     const chatRef = useRef<HTMLDivElement | null>(null);
+
+    const myEntrant = raceInfo?.Entrants?.find(
+        e => e.user?.id === userInfo?.ID
+    );
+
+    const streamBlocksReady = raceStarted && (!myEntrant?.stream_live || myEntrant?.stream_override)
+
+    const canActInRace = joined && raceInProgress && !raceLocked
+
+    const showJoin = !raceLocked
+    const disableJoin = raceInProgress || raceEndedOrCancelled || !canJoin || !hasTwitchName
+    const canJoinRace = !raceLocked && hasTwitchName && canJoin // server signal
+    const showReady = joined && !raceLocked
+    const canReady = joined && !raceLocked && !streamBlocksReady
+    const showDone = joined && raceStarted
+    const canDone = canActInRace
+    const showForfeit = joined && raceStarted
+    const canForfeit = canActInRace
 
     const wasAtBottomRef = useRef(true);
 
@@ -203,6 +229,12 @@ function App() {
         setUnreadTabs(nextUnread);
     }, [raceInfo?.Text, activeChatTab]);
 
+    const joinDisabledReason =
+        !hasTwitchName ? "Link Twitch account" :
+            !canJoin ? "Not eligible (stream required or race rules)" :
+                raceInProgress ? "Race in progress" :
+                    raceEndedOrCancelled ? "Race ended" :
+                        "";
 
     const isAtBottom = () => {
         const el = chatRef.current;
@@ -250,15 +282,6 @@ function App() {
             el.scrollTop = el.scrollHeight;
         }
     }, [raceInfo?.Text]);
-
-    const showJoin = !raceStarted
-    const showReady = joined && !raceStarted
-    const showDone = joined && raceStarted
-    const showForfeit = joined && raceStarted
-
-    const hasTwitchName =
-        userInfo?.TwitchName != null &&
-        userInfo.TwitchName.trim() !== "";
 
     const handleJoinClick = async () => {
         log.info(`join clicked visible=${joinVisible}`);
@@ -368,6 +391,34 @@ function App() {
         }
     };
 
+    const formatChatTime = (timestamp: string) => {
+        const date = new Date(timestamp);
+
+        return date.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    };
+
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+    const linkify = (text?: string | null) => {
+        if (!text) return text;
+
+        const parts = text.split(urlRegex);
+
+        return parts.map((part, i) => {
+            if (part.match(/^https?:\/\//)) {
+                return (
+                    <a key={i} href={part} target="_blank" rel="noopener noreferrer">
+                        {part}
+                    </a>
+                );
+            }
+            return part;
+        });
+    };
+
     useEffect(() => {
         log.info("subscribing to opensplit connection events");
 
@@ -382,10 +433,6 @@ function App() {
 
     useEffect(() => {
         if (!raceInfo) return
-
-        const raceStarted =
-            raceInfo.StatusVerbose?.toLowerCase().includes("progress") ||
-            raceInfo.StatusVerbose?.toLowerCase().includes("started")
 
         if (
             raceStarted &&
@@ -447,13 +494,17 @@ function App() {
     useEffect(() => {
         log.info("subscribing to user info events");
 
-        const newUserInfo = EventsOn("userInfo", (userInfo: UserInfo) => {
-            log.info(
-                `user info updated user=${userInfo.Name} twitchLinked=${userInfo.TwitchName !== ""}`,
-            );
+        const newUserInfo = EventsOn("userInfo", (incoming: UserInfo) => {
+            log.info("userInfo event received", incoming);
 
-            setUserInfo(userInfo)
-        })
+            setUserInfo(prev => {
+                if (!prev) return incoming;
+                return {
+                    ...prev,
+                    ...incoming,
+                };
+            });
+        });
 
         return () => {
             log.debug("unsubscribing from user info events");
@@ -556,10 +607,12 @@ function App() {
     }, [token, race])
 
     useEffect(() => {
-        log.info("setting initial window size");
-
-        WindowSetSize(320, 580);
-    }, []);
+        if (race !== "") {
+            WindowSetSize(900, 700);
+        } else {
+            WindowSetSize(320, 580);
+        }
+    }, [race]);
 
     if (token == "") {
         // no token
@@ -663,219 +716,281 @@ function App() {
             // show race window
             return (
                 <div id="RaceWindow">
-                    <div
-                        style={{
-                            display: "flex",
-                            width: "100%",
-                            justifyContent: "center",
-                            marginTop: "20px",
-                        }}
-                        className="status">
+                    <div className="raceHeader">
+                        {/* LEFT SIDE (EMPTY / aligns with left column) */}
+                        {/* <div className="raceHeaderLeft" /> */}
 
-                        <table>
-                            <tbody>
-                                <tr>
-                                    <td>
-                                        <div
-                                            style={{
-                                                backgroundColor: getStatusColor(
-                                                    openSplitConnection.connection_status,
-                                                ),
-                                                borderRadius: "20px",
-                                                height: "15px",
-                                                width: "15px",
-                                            }}
-                                        ></div>
-                                    </td>
-                                    <td>{openSplitConnection.message}</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        {/* RIGHT SIDE (Back + Connection Status) */}
+                        {/* <div className="raceHeaderRight"> */}
+                        {/* </div> */}
                     </div>
-                    <button
-                        onClick={async () => {
-                            LogInfo(`disconnecting from race`);
-                            await racetime.Join(false)
-                            await racetime.DisconnectRace()
+                    <div className="raceMain">
 
-                            setJoinVisible(true)
-                            setReadyVisible(true)
-                            setDoneVisible(true)
-                            setForfeitVisible(true)
+                        <div className="raceLeft">
+                            <div className="raceInfoBlock">
 
-                            setUserStatus("not_joined")
-
-                            setJoinedRace("")
-                            setRaceInfo(undefined)
-                            setEntrantList([])
-                        }}>
-                        Back to Races
-                    </button>
-
-                    <div>{"Game: " + raceInfo?.Game}</div>
-                    <div>{"Race: " + race}</div>
-                    <div>{"Goal: " + raceInfo?.Goal}</div>
-                    <div>{"Info: " + raceInfo?.Info}</div>
-                    <div>{"Status: " + raceInfo?.StatusVerbose}</div>
-                    <div>{raceInfo?.StatusHelpText}</div>
-
-                    <div>{"Ranked: " + (raceInfo?.Ranked ? "Yes" : "No")}</div>
-
-                    <div>{"Auto Start: " + (raceInfo?.AutoStart ? "Enabled" : "Disabled")}</div>
-                    <div>
-                        {raceInfo?.Entrants?.map((Entrant, index) => (
-                            <div key={index}>
-                                <img
-                                    src={Entrant.stream_live || Entrant.stream_override
-                                        ? connected
-                                        : disconnected}
-                                    alt={Entrant.stream_live || Entrant.stream_override
-                                        ? "Connected"
-                                        : "Disconnected"}
-                                    width={24}
-                                    height={24}
-                                />
-
-                                <div>{Entrant.place_ordinal}</div>
-                                <div>
-                                    <img
-                                        src={Entrant.user.avatar}
-                                        alt={Entrant.user.name}
-                                        width={32}
-                                        height={32}
-                                    />
+                                <div className="raceInfoRow">
+                                    <span className="label">Game:</span>
+                                    <span className="value">{raceInfo?.Game}</span>
                                 </div>
-                                <div>{Entrant.user.name}</div>
-                                <div>{Entrant.user.discriminator}</div>
-                                <div>{Entrant.user.pronouns}</div>
-                                <div>{Entrant.value}</div>
-                                <div>{Entrant.finish_time}</div>
-                                <div>{Entrant.score_change}</div>
+
+                                <div className="raceInfoRow">
+                                    <span className="label">Race:</span>
+                                    <span className="value">{race}</span>
+                                </div>
+
+                                <div className="raceInfoRow">
+                                    <span className="label">Goal:</span>
+                                    <span className="value">{raceInfo?.Goal}</span>
+                                </div>
+
+                                <div className="raceInfoRow">
+                                    <span className="label">Info:</span>
+                                    <div className="value">
+                                        {raceInfo?.Info ? linkify(raceInfo.Info) : ""}
+                                    </div>
+                                </div>
+
                             </div>
-                        ))}
-                        <div>{raceInfo?.EntrantCount + " entrants (" + raceInfo?.EntrantInactiveCount + ")"}</div>
-                    </div>
 
-                    {/* add scrolling text window */}
-                    <div className="chatContainer">
+                            <div className="chatContainer">
 
-                        {/* Tabs */}
-                        <div className="chatTabs">
-                            {chatTabs.map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    className={
-                                        activeChatTab === tab.id
-                                            ? "chatTab active"
-                                            : "chatTab"
-                                    }
-                                    onClick={() => {
-                                        setActiveChatTab(tab.id);
+                                <div className="chatTabs">
+                                    {chatTabs.map((tab) => (
+                                        <button
+                                            key={tab.id}
+                                            className={
+                                                activeChatTab === tab.id
+                                                    ? "chatTab active"
+                                                    : "chatTab"
+                                            }
+                                            onClick={() => {
+                                                setActiveChatTab(tab.id);
 
-                                        setUnreadTabs((prev) => {
-                                            const next = new Set(prev);
-                                            next.delete(tab.id);
-                                            return next;
-                                        });
-                                    }}>
-                                    {tab.label} {unreadTabs.has(tab.id) ? "•" : ""}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Chat messages */}
-                        <div
-                            ref={chatRef}
-                            className="chatBox">
-
-                            {filteredMessages.map((message) => (
-                                <div
-                                    key={message.id}
-                                    className={message.is_dm ? "dmMessage" : "mainMessage"}>
-                                    <div className="chatMeta">
-                                        <span>{message.posted_at}</span>
-                                        <span>
-                                            {message.user?.name ?? "System"}
-                                        </span>
-                                    </div>
-
-                                    <div className="chatText">
-                                        {message.message}
-                                    </div>
+                                                setUnreadTabs((prev) => {
+                                                    const next = new Set(prev);
+                                                    next.delete(tab.id);
+                                                    return next;
+                                                });
+                                            }}>
+                                            {tab.label} {unreadTabs.has(tab.id) ? "•" : ""}
+                                        </button>
+                                    ))}
                                 </div>
-                            ))}
+
+                                <div
+                                    ref={chatRef}
+                                    className="chatBox">
+
+                                    {filteredMessages.map((message) => {
+                                        const senderName = message.is_bot
+                                            ? (message.bot || "Bot")
+                                            : (message.user?.name ?? "System");
+
+                                        return (
+                                            <div
+                                                key={message.id}
+                                                className={
+                                                    message.is_dm
+                                                        ? "dmMessage"
+                                                        : "mainMessage"
+                                                }>
+
+                                                <div className="chatText">
+                                                    <span className="chatTimestamp">
+                                                        {formatChatTime(message.posted_at)}
+                                                    </span>
+                                                    {" "}
+                                                    <span className="chatSender">
+                                                        {senderName}:
+                                                    </span>
+                                                    {" "}
+                                                    {linkify(message.message)}
+                                                </div>
+
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="entrantPanel">
+                            <div className="raceStatusPanel">
+                                <button
+                                    className="backButton"
+                                    onClick={async () => {
+                                        LogInfo(`disconnecting from race`);
+                                        await racetime.Join(false);
+                                        await racetime.DisconnectRace();
+
+                                        setJoinVisible(true);
+                                        setReadyVisible(true);
+                                        setDoneVisible(true);
+                                        setForfeitVisible(true);
+
+                                        setUserStatus("not_joined");
+
+                                        setJoinedRace("");
+                                        setRaceInfo(undefined);
+                                        setEntrantList([]);
+                                    }}
+                                >
+                                    Back to Races
+                                </button>
+
+                                <div className="status">
+                                    <table>
+                                        <tbody>
+                                            <tr>
+                                                <td>
+                                                    <div
+                                                        style={{
+                                                            backgroundColor: getStatusColor(
+                                                                openSplitConnection.connection_status,
+                                                            ),
+                                                            borderRadius: "20px",
+                                                            height: "15px",
+                                                            width: "15px",
+                                                        }}
+                                                    />
+                                                </td>
+                                                <td>{openSplitConnection.message}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div className="raceStatusPanel">
+                                <div className="timerDisplay">
+                                    {raceInfo?.StatusVerbose}
+                                </div>
+
+                                <div className="timerStatus">
+                                    {raceInfo?.StatusHelpText}
+                                </div>
+                                <div>
+                                    {"Ranked: " + (raceInfo?.Ranked ? "Yes" : "No")}
+                                </div>
+
+                                <div>
+                                    {"Auto Start: " + (raceInfo?.AutoStart ? "Enabled" : "Disabled")}
+                                </div>
+                            </div>
+
+                            <div className="entrantList">
+                                {raceInfo?.Entrants?.map((entrant, index) => (
+                                    <div
+                                        key={index}
+                                        className="entrantRow">
+
+                                        <img
+                                            src={
+                                                entrant.stream_live ||
+                                                    entrant.stream_override
+                                                    ? connected
+                                                    : disconnected
+                                            }
+                                            alt="stream"
+                                            width={16}
+                                            height={16}
+                                        />
+
+                                        <img
+                                            src={entrant.user.avatar}
+                                            alt={entrant.user.name}
+                                            width={24}
+                                            height={24}
+                                        />
+
+                                        <span>{entrant.place_ordinal}</span>
+                                        <span>{entrant.user.name}</span>
+                                        <span>{entrant.value}</span>
+                                    </div>
+                                ))}
+
+                                <div className="entrantSummary">
+                                    {raceInfo?.EntrantCount} entrants (
+                                    {raceInfo?.EntrantInactiveCount} inactive)
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 
-                    {/* add hide results check box */}
-                    <label>
+                    <div className="actionPanel">
+
+                        <label>
+                            <input
+                                type="checkbox"
+                                onChange={handleChange}
+                            />
+                            Hide Results
+                        </label>
+
+                        <button
+                            onClick={async () => {
+                                await racetime.SaveLog();
+                            }}>
+                            Save Log
+                        </button>
+
+                        <button
+                            disabled={!canJoinRace}
+                            hidden={!showJoin}
+                            onClick={handleJoinClick}
+                        >
+                            {joinVisible ? "Join" : "Leave"}
+                        </button>
+                        {disableJoin && (
+                            <div className="hint">
+                                Cannot join: {joinDisabledReason}
+                            </div>
+                        )}
+                        <button
+                            disabled={!canReady}
+                            hidden={!showReady}
+                            onClick={handleReadyClick}
+                        >
+                            {readyVisible ? "Ready" : "Unready"}
+                        </button>
+
+                        <button
+                            disabled={!canDone}
+                            hidden={!showDone}
+                            onClick={handleDoneClick}
+                        >
+                            {!doneVisible ? "Done" : "Undone"}
+                        </button>
+
+                        <button
+                            disabled={!canForfeit}
+                            hidden={!showForfeit}
+                            onClick={handleForfeitClick}
+                        >
+                            {!forfeitVisible ? "Forfeit" : "Unforfeit"}
+                        </button>
+
+                    </div>
+
+                    <div className="chatInputBar">
+
                         <input
-                            type="checkbox"
-                            onChange={handleChange} />
-                        Hide Results
-                    </label>
+                            value={textEntry}
+                            onChange={(e) => setTextEntry(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleSend();
+                                }
+                            }}
+                        />
 
-                    {/* add force reload button */}
-                    {/* <button
-                        onClick={async () => { await racetime.ForceReload() }}>
-                        Force Reload
-                    </button> */}
+                        <button onClick={handleSend}>
+                            Send
+                        </button>
 
-                    {/* add save log button */}
-                    <button
-                        onClick={async () => { await racetime.SaveLog() }}>
-                        Save Log
-                    </button>
-
-                    {/* join button */}
-                    <button
-                        hidden={!showJoin || !canJoin}
-                        disabled={raceStarted || !canJoin || !hasTwitchName}
-                        onClick={handleJoinClick}>
-                        {joinVisible ? "Join" : "Leave"}
-                    </button>
-
-                    {!hasTwitchName && (
-                        <div>Please link a Twitch account on racetime.gg to join this race.</div>
-                    )}
-
-                    {/* ready button */}
-                    <button
-                        hidden={!showReady || !canJoin}
-                        disabled={!joined || raceStarted}
-                        onClick={handleReadyClick}>
-                        {readyVisible ? "Ready" : "Unready"}
-                    </button>
-
-                    {/* done button */}
-                    <button
-                        hidden={!showDone}
-                        disabled={!joined || !raceStarted}
-                        onClick={handleDoneClick}>
-                        {!doneVisible ? "Done" : "Undone"}
-                    </button>
-
-                    {/* forfeit button */}
-                    <button
-                        hidden={!showForfeit}
-                        disabled={!joined || !raceStarted}
-                        onClick={handleForfeitClick}>
-                        {!forfeitVisible ? "Forfeit" : "Unforfeit"}
-                    </button>
-
-                    {/* add text entry box and send button */}
-                    <input
-                        value={textEntry}
-                        onChange={(e) => setTextEntry(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleSend();
-                            }
-                        }}
-                    />
-
-                    <button onClick={handleSend}>Send</button>
+                    </div>
                 </div>
             )
         }

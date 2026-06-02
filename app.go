@@ -112,6 +112,7 @@ type RaceInfo struct {
 	Game                 string
 	RaceID               string
 	Info                 string
+	StreamingRequired    bool
 	DisplayResults       bool
 	EntrantCount         int
 	EntrantFinishedCount int
@@ -125,6 +126,8 @@ type RaceInfo struct {
 	StatusVerbose        string
 	StatusHelpText       string
 	DisqualifyUnready    bool
+	EndedAt              *time.Time
+	CancelledAt          *time.Time
 }
 
 type Entrant struct {
@@ -840,6 +843,9 @@ func (a *App) HandleRaceData(data []byte) {
 	a.CurrentRace.Info = race.Info
 	a.CurrentRace.Game = race.Category.Name
 	a.CurrentRace.RaceID = race.Category.Slug
+	a.CurrentRace.StreamingRequired = race.StreamingRequired
+	a.CurrentRace.EndedAt = race.EndedAt
+	a.CurrentRace.CancelledAt = race.CancelledAt
 
 	a.CurrentRace.EntrantCount = race.EntrantsCount
 	a.CurrentRace.EntrantFinishedCount = race.EntrantsCountFinished
