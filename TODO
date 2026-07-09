@@ -6,7 +6,6 @@ handle possible chat errors
 handle bot_meta race data
 
 css to make frontend pretty
-work on acks
 client and opensplit don't communicate
 show invites
 show request to join
