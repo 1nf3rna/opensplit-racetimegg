@@ -9,7 +9,12 @@ import (
 	"time"
 )
 
-var log = logger.Module("processing/engine").SetLevel(logger.ErrorLevel)
+var log = logger.Module("processing/engine").SetLevel(logger.DebugLevel)
+
+const (
+	RecordCommand = 0x00
+	RecordAck     = 0x80
+)
 
 type Command byte
 
@@ -156,33 +161,49 @@ func (e *Engine) readLoop() {
 			continue
 		}
 
-		cmd := Command(buf[6])
+		switch buf[5] {
+		case RecordAck:
+			status := buf[6]
 
-		log.Debug("received command=%s", commandName(cmd))
+			log.Debug("received ACK status=%d", status)
 
-		switch cmd {
-		case HELLO:
-			e.m.Lock()
-			e.lastHelloAck = time.Now()
-			e.m.Unlock()
-
-			log.Debug("received HELLO ACK")
-
-		case DONE:
-			log.Debug("queueing DONE event")
-			select {
-			case e.events <- Event{Command: DONE}:
-			default:
-				log.Warn("event queue full, dropping DONE event")
+			if status == 0 {
+				e.m.Lock()
+				e.lastHelloAck = time.Now()
+				e.m.Unlock()
 			}
 
-		case UNDONE:
-			log.Debug("queueing UNDONE event")
-			select {
-			case e.events <- Event{Command: UNDONE}:
-			default:
-				log.Warn("event queue full, dropping UNDONE event")
+		case RecordCommand:
+			cmd := Command(buf[6])
+
+			log.Debug("received command=%s", commandName(cmd))
+
+			switch cmd {
+			case HELLO:
+				e.m.Lock()
+				e.lastHelloAck = time.Now()
+				e.m.Unlock()
+
+				log.Debug("received HELLO ACK")
+
+			case DONE:
+				log.Debug("queueing DONE event")
+				select {
+				case e.events <- Event{Command: DONE}:
+				default:
+					log.Warn("event queue full, dropping DONE event")
+				}
+
+			case UNDONE:
+				log.Debug("queueing UNDONE event")
+				select {
+				case e.events <- Event{Command: UNDONE}:
+				default:
+					log.Warn("event queue full, dropping UNDONE event")
+				}
 			}
+		default:
+			log.Warn("unknown record type=%d", buf[5])
 		}
 	}
 }
