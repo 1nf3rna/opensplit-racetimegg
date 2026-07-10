@@ -96,6 +96,22 @@ const WebRaceServer = "https://racetime.gg"
 // 	declined
 // )
 
+type RaceActions struct {
+	CanJoin    bool   `json:"canJoin"`
+	JoinReason string `json:"joinReason"`
+
+	CanReady    bool   `json:"canReady"`
+	ReadyReason string `json:"readyReason"`
+
+	CanDone    bool   `json:"canDone"`
+	DoneReason string `json:"doneReason"`
+
+	CanForfeit    bool   `json:"canForfeit"`
+	ForfeitReason string `json:"forfeitReason"`
+
+	StreamBlocked bool `json:"streamBlocked"`
+}
+
 type UserInfo struct {
 	ID            string `json:"id"`
 	FullName      string `json:"full_name"`
@@ -133,6 +149,8 @@ type RaceInfo struct {
 type Entrant struct {
 	User           User          `json:"user"` // user: User data blob for this entrant.
 	Status         EntrantStatus `json:"status"`
+	FinishTime     *string       `json:"finish_time"`     // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
+	FinishedAt     *time.Time    `json:"finished_at"`     // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
 	Place          *int          `json:"place"`           // place: Integer indicating what position the user finished in.
 	PlaceOrdinal   *string       `json:"place_ordinal"`   // place_ordinal: String ordinal version of place, e.g. "3rd".
 	Score          *int          `json:"score"`           // score: Integer amount of points earned by this entrant on the relevant leaderboard. Note that this is not the entrant's current score (unless the race is in progress), it is the score they had when they entered the race, not after.
@@ -144,11 +162,9 @@ type Entrant struct {
 }
 
 type EntrantStatus struct {
-	Value        string     `json:"value"`         // value: A machine-parsable status text.
-	VerboseValue string     `json:"verbose_value"` // verbose_value: A user-parsable status text, e.g. "In progress".
-	HelpText     string     `json:"help_text"`     // help_text: Describes the status, e.g. "Did not finish the race.".
-	FinishTime   *string    `json:"finish_time"`   // finish_time: The user's final finish time, or null if they've not finished (ISO 8601 duration).
-	FinishedAt   *time.Time `json:"finished_at"`   // finished_at: The date/time when the user finished, or null if they've not finished (ISO 8601 date).
+	Value        string `json:"value"`         // value: A machine-parsable status text.
+	VerboseValue string `json:"verbose_value"` // verbose_value: A user-parsable status text, e.g. "In progress".
+	HelpText     string `json:"help_text"`     // help_text: Describes the status, e.g. "Did not finish the race.".
 }
 
 type Category struct {
@@ -214,6 +230,7 @@ type App struct {
 	User                 UserInfo
 	engine               *processing.Engine
 	osConnectionCh       chan bool
+	canJoin              bool
 }
 
 func NewApp() (*App, error) {
@@ -665,59 +682,61 @@ func (a *App) HandleChatError(data []byte) {
 	// Do stuff depending on the errors
 	for _, msgError := range msg.Errors {
 		switch msgError {
+		// Streaming required and twitch channel not linked (join   request_to_join   invite)
 		case "You are not eligible to join this race.":
-			// Streaming required and twitch channel not linked (join   request_to_join   invite)
 			log.Info("User not eligible to join race")
 			// Disable join button
-			runtime.EventsEmit(a.ctx, "joinEligibility", false)
-		case "Races cannot have more than 5 monitors.":
+			a.canJoin = false
+			a.updateRaceActions()
+			// runtime.EventsEmit(a.ctx, "joinEligibility", false)
 			// Inform user too many monitors
+		case "Races cannot have more than 5 monitors.":
+		// Inform user message is too long
 		case "Ensure this value has at most 1000 characters (it has 52428).":
-			// Inform user message is too long
+		// Set if race is being changed from invitational to open when not in that state
 		case "Race is not an invitational.":
-			// Set if race is being changed from invitational to open when not in that state
+		// Set if race is being changed from open to invitational when not in that state
 		case "Race is not open.":
-			// Set if race is being changed from open to invitational when not in that state
+		// Set trying to start race while conditions don't allow it to start (can_begin)
 		case "Race cannot be started yet.":
-			// Set trying to start race while conditions don't allow it to start (can_begin)
+		// Set when trying to cancel a done race
 		case "Cannot cancel a race that is in %(state)s state.":
-			// Set when trying to cancel a done race
+		// Set when trying to partition a race (can_partition)
 		case "Race cannot be partitioned yet.":
-			// Set when trying to partition a race (can_partition)
+		// Set when trying to finish a race that's not in progress (is_in_progress  finish)
 		case "Cannot finish a race that has not been started.":
-			// Set when trying to finish a race that's not in progress (is_in_progress  finish)
+		//(is_unfinalized  unfinish)
 		case "Cannot restart a race from this state.":
-			//(is_unfinalized  unfinish)
+		//(hold   (un)record)
 		case "Race cannot be finalized, it is on hold.":
-			//(hold   (un)record)
 		case "This race cannot be recorded because one or more entrants have deleted their account. Please set this race to \"Do not record\".":
+		//((un)record)
 		case "Race is not recordable or already recorded.":
-			//((un)record)
+		// (add/remove hold)
 		case "Race hold cannot be changed now.":
-			// (add/remove hold)
+		// Set when race in progress and room opener; can't make rematch
 		case "Unable to comply, racing in progress.":
-			// Set when race in progress and room opener; can't make rematch
+		// Set when trying to rematch when not a race monitor
 		case "Only race monitors may create a rematch. Start a new race room instead.":
-			// Set when trying to rematch when not a race monitor
+		// User not allowed to make races
 		case "You are not allowed to start a new race.":
-			// User not allowed to make races
+		// Not a team race (create team   join team   get_available_teams)
 		case "Not a team race.":
-			// Not a team race (create team   join team   get_available_teams)
+		// Join race first
 		case "Cannot join a team (join the race first!).":
-			// Join race first
+		// Cannot join team multiple times
 		case "You are already in that team.":
-			// Cannot join team multiple times
 		case "Cannot change team during the race.":
 		case "You cannot join that team without an invitation.":
+		// invite or joined and disqualify_unready enabled (decline_invite   leave)
 		case "You are not allowed to quit this race.":
-			// invite or joined and disqualify_unready enabled (decline_invite   leave)
 		case "You must join a team before readying up.":
+		// trying to finish before 5s have passed
 		case "You cannot finish this early. Did you hit .done by accident?":
-			// trying to finish before 5s have passed
 		case "You cannot undo your finish as the race time limit has expired.":
 		case "You cannot undo your finish as you have joined another race.":
+		// trying to forfeit before 5s have passed
 		case "You cannot forfeit this early. If you are using an auto-splitter, you should configure it to not auto-reset the timer when starting a run.":
-			// trying to forfeit before 5s have passed
 		case "You cannot undo your forfeit as the race time limit has expired.":
 		case "You cannot undo your forfeit as you have joined another race.":
 		}
@@ -859,8 +878,8 @@ func (a *App) HandleRaceData(data []byte) {
 
 	if !a.CurrentRace.DisplayResults {
 		for i := range race.Entrants {
-			race.Entrants[i].Status.FinishTime = nil
-			race.Entrants[i].Status.FinishedAt = nil
+			race.Entrants[i].FinishTime = nil
+			race.Entrants[i].FinishedAt = nil
 			race.Entrants[i].Place = nil
 			race.Entrants[i].PlaceOrdinal = nil
 			race.Entrants[i].Score = nil
@@ -881,8 +900,10 @@ func (a *App) HandleRaceData(data []byte) {
 		}
 	}
 
+	a.canJoin = true // optimistic until server says otherwise
+	a.updateRaceActions()
 	// Notify frontend
-	runtime.EventsEmit(a.ctx, "joinEligibility", true)
+	// runtime.EventsEmit(a.ctx, "joinEligibility", true)
 	runtime.EventsEmit(a.ctx, "raceStateUpdated", a.CurrentRace)
 
 	a.Send(MessageDataEnvelope{
@@ -960,8 +981,8 @@ func (a *App) HideResults(state bool) {
 		})
 	} else {
 		for i := range a.CurrentRace.Entrants {
-			a.CurrentRace.Entrants[i].Status.FinishTime = nil
-			a.CurrentRace.Entrants[i].Status.FinishedAt = nil
+			a.CurrentRace.Entrants[i].FinishTime = nil
+			a.CurrentRace.Entrants[i].FinishedAt = nil
 			a.CurrentRace.Entrants[i].Place = nil
 			a.CurrentRace.Entrants[i].PlaceOrdinal = nil
 			a.CurrentRace.Entrants[i].Score = nil
@@ -1309,4 +1330,95 @@ func (a *App) getUserInfo() {
 	a.User = user
 
 	runtime.EventsEmit(a.ctx, "userInfo", a.User)
+}
+
+func (a *App) updateRaceActions() {
+	actions := RaceActions{}
+
+	raceLocked :=
+		a.CurrentRace.Status == "in_progress" ||
+			a.CurrentRace.EndedAt != nil ||
+			a.CurrentRace.CancelledAt != nil
+
+	joined := false
+	live := false
+	override := false
+
+	for _, e := range a.CurrentRace.Entrants {
+		if e.User.Id != a.User.ID {
+			continue
+		}
+
+		joined = e.Status.Value != "not_joined"
+		live = e.StreamLive
+		override = e.StreamOverride
+		break
+	}
+
+	hasTwitch := strings.TrimSpace(a.User.TwitchName) != ""
+
+	//
+	// JOIN
+	//
+
+	switch {
+	case raceLocked:
+		actions.JoinReason = "Race unavailable"
+
+	case !a.canJoin:
+		actions.JoinReason = "Not eligible"
+
+	case a.CurrentRace.StreamingRequired && !hasTwitch:
+		actions.JoinReason = "Link Twitch account"
+
+	default:
+		actions.CanJoin = true
+	}
+
+	//
+	// READY
+	//
+
+	switch {
+	case raceLocked:
+		actions.ReadyReason = "Race unavailable"
+
+	case !joined:
+		actions.ReadyReason = "Join race first"
+
+	case a.CurrentRace.StreamingRequired:
+		switch {
+		case !hasTwitch:
+			actions.ReadyReason = "Link Twitch account"
+
+		case !(live || override):
+			actions.StreamBlocked = true
+			actions.ReadyReason = "Stream must be live"
+
+		default:
+			actions.CanReady = true
+		}
+
+	default:
+		actions.CanReady = true
+	}
+
+	//
+	// DONE / FORFEIT
+	//
+
+	raceRunning := a.CurrentRace.Status == "in_progress"
+
+	actions.CanDone = joined && raceRunning
+	actions.CanForfeit = joined && raceRunning
+
+	if !actions.CanDone {
+		actions.DoneReason = "Race not in progress"
+	}
+
+	if !actions.CanForfeit {
+		actions.ForfeitReason = "Race not in progress"
+	}
+
+	runtime.EventsEmit(a.ctx, "raceActionsUpdated", actions)
 }

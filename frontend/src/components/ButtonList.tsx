@@ -17,11 +17,7 @@ type Props = {
   className?: string;
 };
 
-export default function ButtonList({
-  data,
-  onClick,
-  className,
-}: Props) {
+export default function ButtonList({ data, onClick, className }: Props) {
   log.debug(`rendering button list count=${data.length}`);
 
   return (
