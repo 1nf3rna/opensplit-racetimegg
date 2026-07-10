@@ -6,6 +6,12 @@ export type ButtonData = {
   id: string;
   label: string;
   URL: string;
+
+  category?: string;
+  runtimeSeconds?: number;
+
+  isHeader?: boolean;
+
   action?: string;
   disabled?: boolean;
   title?: string;
@@ -32,33 +38,61 @@ export default function ButtonList({ data, onClick, className }: Props) {
         gap: "8px",
       }}
     >
-      {data.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          id={`btn-${item.id}`}
-          title={item.title}
-          disabled={item.disabled}
-          style={{ width: "100%" }}
-          onClick={() => {
-            log.info(`button clicked id=${item.id}`);
+      {data.map((item) => {
+        if (item.isHeader) {
+          return (
+            <div
+              key={item.id}
+              style={{
+                marginTop: "12px",
+                marginBottom: "8px",
+              }}
+            >
+              <hr />
 
-            if (item.disabled) {
-              log.warn(`blocked click for disabled button id=${item.id}`);
-              return;
-            }
+              <div
+                style={{
+                  fontWeight: "bold",
+                  textAlign: "center",
+                  padding: "4px 0",
+                }}
+              >
+                {item.label}
+              </div>
 
-            try {
-              onClick?.(item);
-              log.debug(`button handler executed id=${item.id}`);
-            } catch (error) {
-              log.error(`button handler failed id=${item.id}`, error);
-            }
-          }}
-        >
-          {item.label}
-        </button>
-      ))}
+              <hr />
+            </div>
+          );
+        }
+
+        return (
+          <button
+            key={item.id}
+            type="button"
+            id={`btn-${item.id}`}
+            title={item.title}
+            disabled={item.disabled}
+            style={{ width: "100%" }}
+            onClick={() => {
+              log.info(`button clicked id=${item.id}`);
+
+              if (item.disabled) {
+                log.warn(`blocked click for disabled button id=${item.id}`);
+                return;
+              }
+
+              try {
+                onClick?.(item);
+                log.debug(`button handler executed id=${item.id}`);
+              } catch (error) {
+                log.error(`button handler failed id=${item.id}`, error);
+              }
+            }}
+          >
+            {item.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
