@@ -6,7 +6,11 @@ import connected from "./assets/images/broadcast_icon_connected.png";
 import disconnected from "./assets/images/broadcast_icon_disconnected.png";
 import ButtonList, { ButtonData } from "./components/ButtonList";
 import { moduleLogger } from "./components/logger";
-import { LoginWithOAuth, RaceList } from "./components/racetime_gg";
+import {
+  LoginWithOAuth,
+  RaceList,
+  formatDuration,
+} from "./components/racetimeGG";
 
 const log = moduleLogger("APP");
 
@@ -22,16 +26,6 @@ type ConnectionState = {
   message: string;
 };
 
-type UserInfo = {
-  ID: string;
-  FullName: string;
-  Name: string;
-  Discriminator: string;
-  Avatar: string;
-  twitch_name: string;
-  IsStaff: boolean;
-};
-
 type RaceInfo = {
   Version: number;
   Goal: string;
@@ -39,7 +33,6 @@ type RaceInfo = {
   RaceID: string;
   Info: string;
   StreamingRequired: boolean;
-  DisplayResults: boolean;
   EntrantCount: number;
   EntrantFinishedCount: number;
   EntrantInactiveCount: number;
@@ -88,7 +81,7 @@ type User = {
 
 type Entrant = {
   user: User;
-  value: UserStatus;
+  status: EntrantStatus;
   verbose_value: string;
   help_text: string;
   finish_time: string;
@@ -104,19 +97,26 @@ type Entrant = {
 };
 
 type RaceActions = {
-  CanJoin: boolean;
-  JoinReason: string;
+  canJoin: boolean;
+  joinReason: string;
+  joinAction: "join" | "request_invite";
 
-  CanReady: boolean;
-  ReadyReason: string;
+  canReady: boolean;
+  readyReason: string;
 
-  CanDone: boolean;
-  DoneReason: string;
+  canDone: boolean;
+  doneReason: string;
 
-  CanForfeit: boolean;
-  ForfeitReason: string;
+  canForfeit: boolean;
+  forfeitReason: string;
 
-  StreamBlocked: boolean;
+  streamBlocked: boolean;
+};
+
+type EntrantStatus = {
+  value: string;
+  verbose_value: string;
+  help_text: string;
 };
 
 type UserStatus =
@@ -133,21 +133,18 @@ type UserStatus =
   | "dq";
 
 function App() {
-  log.debug("rendering app");
-
   const [token, setToken] = useState<string>("");
   const [raceList, setRaceList] = useState<ButtonData[]>([]);
   const [race, setJoinedRace] = useState<string>("");
   const [textEntry, setTextEntry] = useState<string>("");
+  const [hideResults, setHideResults] = useState(false);
   const [joinVisible, setJoinVisible] = useState<boolean>(true);
   const [readyVisible, setReadyVisible] = useState<boolean>(true);
   const [doneVisible, setDoneVisible] = useState<boolean>(true);
   const [forfeitVisible, setForfeitVisible] = useState<boolean>(true);
   const [userStatus, setUserStatus] = useState<UserStatus>("not_joined");
   const [raceInfo, setRaceInfo] = useState<RaceInfo>();
-  const [userInfo, setUserInfo] = useState<UserInfo>();
   const [entrantList, setEntrantList] = useState<Entrant[]>([]);
-  // const [canJoin, setCanJoin] = useState<boolean>(true);
   const [activeChatTab, setActiveChatTab] = useState<string>("main");
   const [unreadTabs, setUnreadTabs] = useState<Set<string>>(new Set());
   const [openSplitConnection, setOpenSplitConnection] =
@@ -156,45 +153,23 @@ function App() {
       message: "Opensplit Not Found",
     });
   const [raceActions, setRaceActions] = useState<RaceActions>({
-    CanJoin: false,
-    JoinReason: "",
+    canJoin: false,
+    joinReason: "",
+    joinAction: "join",
 
-    CanReady: false,
-    ReadyReason: "",
+    canReady: false,
+    readyReason: "",
 
-    CanDone: false,
-    DoneReason: "",
+    canDone: false,
+    doneReason: "",
 
-    CanForfeit: false,
-    ForfeitReason: "",
+    canForfeit: false,
+    forfeitReason: "",
 
-    StreamBlocked: false,
+    streamBlocked: false,
   });
 
-  // const raceStarted = raceInfo?.Status === "in_progress";
-  // const joined = userStatus !== "not_joined";
-
-  // const raceEndedOrCancelled =
-  //   raceInfo?.EndedAt != null || raceInfo?.CancelledAt != null;
-
-  // const raceInProgress = raceInfo?.Status === "in_progress";
-
-  // const hasTwitchName =
-  //   userInfo?.twitch_name != null && userInfo.twitch_name.trim() !== "";
-
-  // const raceEnded = !!raceInfo?.EndedAt || !!raceInfo?.CancelledAt;
-
-  // const raceLocked = raceInProgress || raceEnded;
-
   const chatRef = useRef<HTMLDivElement | null>(null);
-
-  const myEntrant = raceInfo?.Entrants?.find(
-    (e) => e.user?.id === userInfo?.ID,
-  );
-
-  // const streamBlocksReady = raceStarted && (!myEntrant?.stream_live || myEntrant?.stream_override)
-
-  // const canActInRace = joined && raceInProgress && !raceLocked
 
   const raceLocked =
     raceInfo?.Status === "in_progress" ||
@@ -206,15 +181,9 @@ function App() {
   const joined = userStatus !== "not_joined";
 
   const showJoin = !raceLocked;
-  // const disableJoin =
-  //   raceInProgress || raceEndedOrCancelled || !canJoin || !hasTwitchName;
-  // const canJoinRace = !raceLocked && canJoin && raceInfo?.StreamingRequired ? hasTwitchName : true // server signal
   const showReady = joined && !raceLocked;
-  // const canReady = joined && !raceLocked && !streamBlocksReady
   const showDone = joined && raceStarted;
-  // const canDone = canActInRace
   const showForfeit = joined && raceStarted;
-  // const canForfeit = canActInRace
 
   const wasAtBottomRef = useRef(true);
 
@@ -278,13 +247,6 @@ function App() {
     setUnreadTabs(nextUnread);
   }, [raceInfo?.Text, activeChatTab]);
 
-  // const joinDisabledReason =
-  //     !hasTwitchName ? "Link Twitch account" :
-  //         !canJoin ? "Not eligible (stream required or race rules)" :
-  //             raceInProgress ? "Race in progress" :
-  //                 raceEndedOrCancelled ? "Race ended" :
-  //                     "";
-
   const isAtBottom = () => {
     const el = chatRef.current;
 
@@ -335,12 +297,17 @@ function App() {
   const handleJoinClick = async () => {
     log.info(`join clicked visible=${joinVisible}`);
 
-    await racetime.Join(joinVisible);
-
     if (joinVisible) {
+      if (raceActions.joinAction === "request_invite") {
+        await racetime.RequestInvite();
+        return;
+      }
+
+      await racetime.Join(true);
       setUserStatus("not_ready");
       log.info("user joined race");
     } else {
+      await racetime.Join(false);
       setUserStatus("not_joined");
       log.info("user left race");
     }
@@ -417,14 +384,6 @@ function App() {
     }
   };
 
-  const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.checked;
-
-    log.info(`hide results changed value=${value}`);
-
-    await racetime.HideResults(value);
-  };
-
   const getStatusColor = (state: ConnectionStatus) => {
     switch (state) {
       case ConnectionStatus.Disconnected:
@@ -495,24 +454,6 @@ function App() {
     }
   }, [raceInfo?.StatusVerbose]);
 
-  // useEffect(() => {
-  //   log.info("subscribing to join eligibility events");
-
-  //   const eligibilityEvent = EventsOn(
-  //     "joinEligibility",
-  //     (eligible: boolean) => {
-  //       log.info(`join eligibility updated eligible=${eligible}`);
-
-  //       setCanJoin(eligible);
-  //     },
-  //   );
-
-  //   return () => {
-  //     log.debug("unsubscribing from join eligibility events");
-  //     eligibilityEvent();
-  //   };
-  // }, []);
-
   useEffect(() => {
     log.info("subscribing to chat update events");
 
@@ -533,27 +474,6 @@ function App() {
     return () => {
       log.debug("unsubscribing from chat update events");
       newChatText();
-    };
-  }, []);
-
-  useEffect(() => {
-    log.info("subscribing to user info events");
-
-    const newUserInfo = EventsOn("userInfo", (incoming: UserInfo) => {
-      log.info("userInfo event received", incoming);
-
-      setUserInfo((prev) => {
-        if (!prev) return incoming;
-        return {
-          ...prev,
-          ...incoming,
-        };
-      });
-    });
-
-    return () => {
-      log.debug("unsubscribing from user info events");
-      newUserInfo();
     };
   }, []);
 
@@ -711,13 +631,21 @@ function App() {
       // no race
       // show race list buttons
       return (
-        <div id="RaceList">
+        <div
+          id="RaceList"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            height: "100vh",
+          }}
+        >
+          {/* Always visible */}
           <div
             style={{
+              flexShrink: 0,
               display: "flex",
-              width: "100%",
               justifyContent: "center",
-              marginTop: "20px",
+              padding: "20px 0 10px",
             }}
             className="status"
           >
@@ -734,29 +662,39 @@ function App() {
                         height: "15px",
                         width: "15px",
                       }}
-                    ></div>
+                    />
                   </td>
                   <td>{openSplitConnection.message}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <ButtonList
-            data={raceList}
-            onClick={async (item) => {
-              try {
-                LogInfo(`joining websocket race=${item.URL}`);
 
-                setJoinedRace(item.URL);
-
-                await racetime.WebSocketConnection(item.URL);
-
-                LogInfo(`websocket connected race=${item.URL}`);
-              } catch (err) {
-                LogError(`failed to connect websocket: ${err}`);
-              }
+          {/* Scrollable */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              minHeight: 0,
             }}
-          />
+          >
+            <ButtonList
+              data={raceList}
+              onClick={async (item) => {
+                try {
+                  LogInfo(`joining websocket race=${item.URL}`);
+
+                  setJoinedRace(item.URL);
+
+                  await racetime.WebSocketConnection(item.URL);
+
+                  LogInfo(`websocket connected race=${item.URL}`);
+                } catch (err) {
+                  LogError(`failed to connect websocket: ${err}`);
+                }
+              }}
+            />
+          </div>
         </div>
       );
     } else {
@@ -918,16 +856,23 @@ function App() {
                       height={16}
                     />
 
-                    <img
-                      src={entrant.user.avatar}
-                      alt={entrant.user.name}
-                      width={24}
-                      height={24}
-                    />
+                    <img src={entrant.user.avatar} width={24} height={24} />
 
-                    <span>{entrant.place_ordinal}</span>
+                    {!hideResults && <span>{entrant.place_ordinal}</span>}
+
                     <span>{entrant.user.name}</span>
-                    <span>{entrant.value}</span>
+
+                    {!hideResults && (
+                      <span>{entrant.status.verbose_value}</span>
+                    )}
+
+                    {!hideResults && (
+                      <span>{formatDuration(entrant.finish_time)}</span>
+                    )}
+
+                    {/*{!hideResults && (
+                      <span>{entrant.comment}</span>
+                    )}*/}
                   </div>
                 ))}
 
@@ -941,7 +886,11 @@ function App() {
 
           <div className="actionPanel">
             <label>
-              <input type="checkbox" onChange={handleChange} />
+              <input
+                type="checkbox"
+                checked={hideResults}
+                onChange={(e) => setHideResults(e.target.checked)}
+              />
               Hide Results
             </label>
 
@@ -954,54 +903,53 @@ function App() {
             </button>
 
             <button
-              disabled={!raceActions.CanJoin}
-              // disabled={!actions.canJoin}
+              disabled={!raceActions.canJoin}
               hidden={!showJoin}
               onClick={handleJoinClick}
             >
-              {joinVisible ? "Join" : "Leave"}
+              {joinVisible
+                ? raceActions.joinAction === "request_invite"
+                  ? "Request to Join"
+                  : "Join"
+                : "Leave"}
             </button>
-            {!raceActions.CanJoin && raceActions.JoinReason && (
-              <div className="hint">{raceActions.JoinReason}</div>
+            {!raceActions.canJoin && showJoin && raceActions.joinReason && (
+              <div className="hint">{raceActions.joinReason}</div>
             )}
-            {/*{disableJoin && (
-              <div className="hint">Cannot join: {joinDisabledReason}</div>
-            )}*/}
             <button
-              disabled={!raceActions.CanReady}
-              // disabled={!canReady}
+              disabled={!raceActions.canReady}
               hidden={!showReady}
               onClick={handleReadyClick}
             >
               {readyVisible ? "Ready" : "Unready"}
             </button>
-            {!raceActions.CanReady && raceActions.ReadyReason && (
-              <div className="hint">{raceActions.ReadyReason}</div>
+            {!raceActions.canReady && showReady && raceActions.readyReason && (
+              <div className="hint">{raceActions.readyReason}</div>
             )}
 
             <button
-              disabled={!raceActions.CanDone}
-              // disabled={!canDone}
+              disabled={!raceActions.canDone}
               hidden={!showDone}
               onClick={handleDoneClick}
             >
               {!doneVisible ? "Done" : "Undone"}
             </button>
-            {!raceActions.CanDone && raceActions.DoneReason && (
-              <div className="hint">{raceActions.DoneReason}</div>
+            {!raceActions.canDone && showDone && raceActions.doneReason && (
+              <div className="hint">{raceActions.doneReason}</div>
             )}
 
             <button
-              disabled={!raceActions.CanForfeit}
-              // disabled={!canForfeit}
+              disabled={!raceActions.canForfeit}
               hidden={!showForfeit}
               onClick={handleForfeitClick}
             >
               {!forfeitVisible ? "Forfeit" : "Unforfeit"}
             </button>
-            {!raceActions.CanForfeit && raceActions.ForfeitReason && (
-              <div className="hint">{raceActions.ForfeitReason}</div>
-            )}
+            {!raceActions.canForfeit &&
+              showForfeit &&
+              raceActions.forfeitReason && (
+                <div className="hint">{raceActions.forfeitReason}</div>
+              )}
           </div>
 
           <div className="chatInputBar">
