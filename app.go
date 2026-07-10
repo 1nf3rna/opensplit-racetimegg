@@ -52,53 +52,17 @@ var log = logger.Module("app").SetLevel(logger.ErrorLevel)
 const socketUrl = "wss://racetime.gg"
 const WebRaceServer = "https://racetime.gg"
 
-// const component = "App"
+type JoinAction string
 
-// var logger = logging.NewLogger(true)
-
-// type RaceState int
-
-// const (
-// 	invitational = iota
-// 	pending
-// 	partitioned //(only for ladder 1v1 races)
-// 	open
-// 	inProgressState
-// 	finished
-// 	cancelled
-// )
-
-// type UserRole int
-
-// const (
-// 	Unknown UserRole = iota
-// 	Anonymous
-// 	Regular
-// 	ChannelCreator UserRole = 4
-// 	Monitor        UserRole = 8
-// 	Moderator      UserRole = 16
-// 	Staff          UserRole = 32
-// 	Bot            UserRole = 64
-// 	System         UserRole = 128
-// )
-
-// type UserStatus int
-
-// const (
-// 	ready = iota
-// 	not_ready
-// 	inProgressStatus
-// 	done
-// 	dnf //(did not finish, i.e. forfeited)
-// 	dq  //(disqualified)
-// 	requested
-// 	invited
-// 	declined
-// )
+const (
+	JoinActionJoin    JoinAction = "join"
+	JoinActionRequest JoinAction = "request_invite"
+)
 
 type RaceActions struct {
-	CanJoin    bool   `json:"canJoin"`
-	JoinReason string `json:"joinReason"`
+	CanJoin    bool       `json:"canJoin"`
+	JoinReason string     `json:"joinReason"`
+	JoinAction JoinAction `json:"joinAction"`
 
 	CanReady    bool   `json:"canReady"`
 	ReadyReason string `json:"readyReason"`
@@ -129,7 +93,6 @@ type RaceInfo struct {
 	RaceID               string
 	Info                 string
 	StreamingRequired    bool
-	DisplayResults       bool
 	EntrantCount         int
 	EntrantFinishedCount int
 	EntrantInactiveCount int
@@ -255,8 +218,6 @@ func NewApp() (*App, error) {
 		engine:         engine,
 		osConnectionCh: connCh,
 	}
-
-	client.CurrentRace.DisplayResults = true
 
 	client.handlers["chat.message"] = client.HandleChatMessage
 	client.handlers["chat.history"] = client.HandleChatHistory
@@ -688,7 +649,6 @@ func (a *App) HandleChatError(data []byte) {
 			// Disable join button
 			a.canJoin = false
 			a.updateRaceActions()
-			// runtime.EventsEmit(a.ctx, "joinEligibility", false)
 			// Inform user too many monitors
 		case "Races cannot have more than 5 monitors.":
 		// Inform user message is too long
@@ -876,19 +836,6 @@ func (a *App) HandleRaceData(data []byte) {
 	a.CurrentRace.StatusHelpText = race.Status.HelpText
 	a.CurrentRace.DisqualifyUnready = race.DisqualifyUnready
 
-	if !a.CurrentRace.DisplayResults {
-		for i := range race.Entrants {
-			race.Entrants[i].FinishTime = nil
-			race.Entrants[i].FinishedAt = nil
-			race.Entrants[i].Place = nil
-			race.Entrants[i].PlaceOrdinal = nil
-			race.Entrants[i].Score = nil
-			race.Entrants[i].ScoreChange = nil
-			race.Entrants[i].Comment = nil
-			race.Entrants[i].HasComment = nil
-		}
-	}
-
 	a.CurrentRace.Entrants = race.Entrants
 
 	if previousStatus != "in_progress" && a.CurrentRace.Status == "in_progress" {
@@ -903,7 +850,6 @@ func (a *App) HandleRaceData(data []byte) {
 	a.canJoin = true // optimistic until server says otherwise
 	a.updateRaceActions()
 	// Notify frontend
-	// runtime.EventsEmit(a.ctx, "joinEligibility", true)
 	runtime.EventsEmit(a.ctx, "raceStateUpdated", a.CurrentRace)
 
 	a.Send(MessageDataEnvelope{
@@ -957,6 +903,13 @@ func (a *App) Ready(state bool) {
 }
 
 // true for join; false for leave
+func (a *App) RequestInvite() {
+	log.Info("Requesting Invite!")
+	// a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
+	a.SendText(".request_invite", a.generateGUID())
+}
+
+// true for join; false for leave
 func (a *App) Join(state bool) {
 	log.Info("Join status changed!")
 	if state {
@@ -965,34 +918,6 @@ func (a *App) Join(state bool) {
 	} else {
 		a.engine.CLEAR_RUNTIME_OFFSET()
 		a.SendText(".leave", a.generateGUID())
-	}
-}
-
-// true for hide results; false for show results
-func (a *App) HideResults(state bool) {
-	a.CurrentRace.DisplayResults = state
-
-	if !state {
-		a.Send(MessageDataEnvelope{
-			Action: "getrace",
-			Data: MessageData{
-				GUID: a.generateGUID(),
-			},
-		})
-	} else {
-		for i := range a.CurrentRace.Entrants {
-			a.CurrentRace.Entrants[i].FinishTime = nil
-			a.CurrentRace.Entrants[i].FinishedAt = nil
-			a.CurrentRace.Entrants[i].Place = nil
-			a.CurrentRace.Entrants[i].PlaceOrdinal = nil
-			a.CurrentRace.Entrants[i].Score = nil
-			a.CurrentRace.Entrants[i].ScoreChange = nil
-			a.CurrentRace.Entrants[i].Comment = nil
-			a.CurrentRace.Entrants[i].HasComment = nil
-		}
-
-		// Notify frontend
-		runtime.EventsEmit(a.ctx, "entrantsUpdated", a.CurrentRace.Entrants)
 	}
 }
 
@@ -1107,7 +1032,12 @@ func (a *App) readRoutine() {
 
 		_, data, err := a.racetimeWS.Read(a.ctx)
 		if err != nil {
-			log.Error("read error:", err)
+			switch websocket.CloseStatus(err) {
+			case websocket.StatusNormalClosure:
+				log.Info("websocket closed normally")
+			default:
+				log.Error("read error: %v", err)
+			}
 			return
 		}
 
@@ -1328,12 +1258,12 @@ func (a *App) getUserInfo() {
 	log.Info("%+v\n", user)
 
 	a.User = user
-
-	runtime.EventsEmit(a.ctx, "userInfo", a.User)
 }
 
 func (a *App) updateRaceActions() {
 	actions := RaceActions{}
+
+	actions.JoinAction = JoinActionJoin
 
 	raceLocked :=
 		a.CurrentRace.Status == "in_progress" ||
@@ -1344,15 +1274,16 @@ func (a *App) updateRaceActions() {
 	live := false
 	override := false
 
-	for _, e := range a.CurrentRace.Entrants {
-		if e.User.Id != a.User.ID {
-			continue
-		}
+	var myEntrant *Entrant
 
-		joined = e.Status.Value != "not_joined"
-		live = e.StreamLive
-		override = e.StreamOverride
-		break
+	for _, e := range a.CurrentRace.Entrants {
+		if e.User.Id == a.User.ID {
+			myEntrant = &e
+			joined = e.Status.Value != "not_joined"
+			live = e.StreamLive
+			override = e.StreamOverride
+			break
+		}
 	}
 
 	hasTwitch := strings.TrimSpace(a.User.TwitchName) != ""
@@ -1367,6 +1298,19 @@ func (a *App) updateRaceActions() {
 
 	case !a.canJoin:
 		actions.JoinReason = "Not eligible"
+
+	case a.CurrentRace.Status == "invitational":
+		actions.JoinAction = JoinActionRequest
+
+		if myEntrant != nil &&
+			myEntrant.Status.Value == "invited" {
+			actions.JoinAction = JoinActionJoin
+		} else {
+			actions.CanJoin = true
+			break
+		}
+
+		fallthrough
 
 	case a.CurrentRace.StreamingRequired && !hasTwitch:
 		actions.JoinReason = "Link Twitch account"
