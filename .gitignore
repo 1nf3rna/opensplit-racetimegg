@@ -38,3 +38,4 @@ frontend/dist/
 frontend/wailsjs/
 frontend/package-lock.json
 token.enc
+frontend/package.json.md5
