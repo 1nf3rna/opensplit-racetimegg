@@ -1,8 +1,37 @@
+import { Authorize, GenTokens } from "../../wailsjs/go/main/App";
 import { ButtonData } from "./ButtonList";
 import { moduleLogger } from "./logger";
-import { Authorize, GenTokens } from "../../wailsjs/go/main/App";
 
 const log = moduleLogger("RACETIME");
+
+export function formatDuration(duration?: string | null): string {
+  if (!duration) return "";
+
+  const match = duration.match(
+    /^P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/,
+  );
+
+  if (!match) {
+    return duration;
+  }
+
+  const days = parseInt(match[1] ?? "0", 10);
+  const hours = parseInt(match[2] ?? "0", 10);
+  const minutes = parseInt(match[3] ?? "0", 10);
+  const seconds = Math.floor(parseFloat(match[4] ?? "0"));
+
+  const pad = (n: number) => n.toString().padStart(2, "0");
+
+  if (days > 0) {
+    return `${days}d ${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  return `${minutes}:${pad(seconds)}`;
+}
 
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -86,16 +115,58 @@ export async function RaceList(restUrl: string) {
           `runtime=${runTime}`,
       );
 
+      const runtimeSeconds =
+        status === "in_progress" && startedAt
+          ? Math.max(
+              0,
+              Math.floor((serverTime.getTime() - startedAt.getTime()) / 1000),
+            )
+          : 0;
+
       DATA.push({
         id: index.toString(),
         URL,
+        category: categoryName,
+        runtimeSeconds,
         label:
           `[${runTime}] ` +
           `(${URL}) ` +
           `${categoryName} - ` +
           `${goal} ` +
-          `(${entrantFinishedCount}/${entrantCount} Finished)`,
+          ` (${entrantFinishedCount}/${entrantCount} Finished)`,
       });
+    }
+    DATA.sort((a, b) => {
+      // category
+      const cat = (a.category ?? "").localeCompare(b.category ?? "");
+      if (cat !== 0) return cat;
+
+      // newest first (lowest runtime first)
+      const runtime = (a.runtimeSeconds ?? 0) - (b.runtimeSeconds ?? 0);
+      if (runtime !== 0) return runtime;
+
+      // alphabetical url
+      return a.URL.localeCompare(b.URL);
+    });
+
+    let currentCategory = "";
+
+    for (let i = 0; i < DATA.length; i++) {
+      const item = DATA[i];
+
+      if (item.category !== currentCategory) {
+        currentCategory = item.category ?? "";
+
+        DATA.splice(i, 0, {
+          id: `header-${currentCategory}`,
+          label: currentCategory,
+          URL: "",
+          isHeader: true,
+        });
+
+        // Skip over the header we just inserted.
+        i++;
+      }
     }
 
     log.info(`race list built count=${DATA.length}`);
