@@ -4,9 +4,9 @@ disable starting timer from opensplit or factfinder if connected to a race
 handle chat actions
 handle possible chat errors
 handle bot_meta race data
+chat needs pretty display
 
 css to make frontend pretty
 client and opensplit don't communicate
 show invites
-show request to join
 cannot join if not streaming even in a stream not required race
