@@ -27,6 +27,7 @@ type ConnectionState = {
 };
 
 type RaceInfo = {
+  UserID: string;
   Version: number;
   Goal: string;
   Game: string;
@@ -99,7 +100,10 @@ type Entrant = {
 type RaceActions = {
   canJoin: boolean;
   joinReason: string;
-  joinAction: "join" | "request_invite";
+  joinAction: "join" | "accept_invite" | "request_invite";
+
+  canLeave: boolean;
+  leaveAction: "leave" | "decline_invite" | "cancel_invite";
 
   canReady: boolean;
   readyReason: string;
@@ -138,7 +142,7 @@ function App() {
   const [race, setJoinedRace] = useState<string>("");
   const [textEntry, setTextEntry] = useState<string>("");
   const [hideResults, setHideResults] = useState(false);
-  const [joinVisible, setJoinVisible] = useState<boolean>(true);
+  // const [joinVisible, setJoinVisible] = useState<boolean>(true);
   const [readyVisible, setReadyVisible] = useState<boolean>(true);
   const [doneVisible, setDoneVisible] = useState<boolean>(true);
   const [forfeitVisible, setForfeitVisible] = useState<boolean>(true);
@@ -156,6 +160,9 @@ function App() {
     canJoin: false,
     joinReason: "",
     joinAction: "join",
+
+    canLeave: false,
+    leaveAction: "leave",
 
     canReady: false,
     readyReason: "",
@@ -178,7 +185,14 @@ function App() {
 
   const raceStarted = raceInfo?.Status === "in_progress";
 
-  const joined = userStatus !== "not_joined";
+  // const joined = userStatus !== "not_joined";
+  const joined =
+    userStatus === "ready" ||
+    userStatus === "not_ready" ||
+    userStatus === "in_progress" ||
+    userStatus === "done" ||
+    userStatus === "dnf" ||
+    userStatus === "dq";
 
   const showJoin = !raceLocked;
   const showReady = joined && !raceLocked;
@@ -294,25 +308,45 @@ function App() {
     }
   }, [raceInfo?.Text]);
 
+  useEffect(() => {
+    if (!raceInfo) return;
+
+    const me = raceInfo.Entrants.find((e) => e.user.id === raceInfo.UserID);
+
+    setUserStatus(me ? (me.status.value as UserStatus) : "not_joined");
+  }, [raceInfo]);
+
   const handleJoinClick = async () => {
-    log.info(`join clicked visible=${joinVisible}`);
+    log.info(`join clicked`);
 
-    if (joinVisible) {
-      if (raceActions.joinAction === "request_invite") {
-        await racetime.RequestInvite();
-        return;
-      }
+    switch (raceActions.joinAction) {
+      case "join":
+      case "accept_invite":
+        await racetime.Join();
+        break;
 
-      await racetime.Join(true);
-      setUserStatus("not_ready");
-      log.info("user joined race");
-    } else {
-      await racetime.Join(false);
-      setUserStatus("not_joined");
-      log.info("user left race");
+      case "request_invite":
+        await racetime.RequestInvite(true);
+        break;
     }
+  };
 
-    setJoinVisible(!joinVisible);
+  const handleLeaveClick = async () => {
+    log.info(`leave clicked`);
+
+    switch (raceActions.leaveAction) {
+      case "leave":
+        await racetime.Leave();
+        break;
+
+      case "decline_invite":
+        await racetime.DeclineInvite();
+        break;
+
+      case "cancel_invite":
+        await racetime.RequestInvite(false);
+        break;
+    }
   };
 
   const handleReadyClick = async () => {
@@ -790,10 +824,9 @@ function App() {
                   className="backButton"
                   onClick={async () => {
                     LogInfo(`disconnecting from race`);
-                    await racetime.Join(false);
+                    await racetime.Join();
                     await racetime.DisconnectRace();
 
-                    setJoinVisible(true);
                     setReadyVisible(true);
                     setDoneVisible(true);
                     setForfeitVisible(true);
@@ -902,19 +935,30 @@ function App() {
               Save Log
             </button>
 
-            <button
-              disabled={!raceActions.canJoin}
-              hidden={!showJoin}
-              onClick={handleJoinClick}
-            >
-              {joinVisible
-                ? raceActions.joinAction === "request_invite"
-                  ? "Request to Join"
-                  : "Join"
-                : "Leave"}
-            </button>
+            {raceActions.canJoin && (
+              <button onClick={handleJoinClick}>
+                {
+                  {
+                    join: "Join",
+                    accept_invite: "Accept Invite",
+                    request_invite: "Request Invite",
+                  }[raceActions.joinAction]
+                }
+              </button>
+            )}
             {!raceActions.canJoin && showJoin && raceActions.joinReason && (
               <div className="hint">{raceActions.joinReason}</div>
+            )}
+            {raceActions.canLeave && (
+              <button onClick={handleLeaveClick}>
+                {
+                  {
+                    leave: "Leave",
+                    decline_invite: "Decline Invite",
+                    cancel_invite: "Cancel Invite",
+                  }[raceActions.leaveAction]
+                }
+              </button>
             )}
             <button
               disabled={!raceActions.canReady}

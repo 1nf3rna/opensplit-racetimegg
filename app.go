@@ -21,7 +21,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
-var log = logger.Module("app").SetLevel(logger.ErrorLevel)
+var log = logger.Module("app").SetLevel(logger.InfoLevel)
 
 // // OAUTH_REDIRECT_ADDRESS
 // 127.0.0.1
@@ -55,14 +55,27 @@ const WebRaceServer = "https://racetime.gg"
 type JoinAction string
 
 const (
-	JoinActionJoin    JoinAction = "join"
-	JoinActionRequest JoinAction = "request_invite"
+	JoinActionJoin          JoinAction = "join"
+	JoinActionAcceptInvite  JoinAction = "accept_invite"
+	JoinActionRequestInvite JoinAction = "request_invite"
+)
+
+type LeaveAction string
+
+const (
+	LeaveActionLeave         LeaveAction = "leave"
+	LeaveActionDeclineInvite LeaveAction = "decline_invite"
+	LeaveActionCancelInvite  LeaveAction = "cancel_invite"
 )
 
 type RaceActions struct {
 	CanJoin    bool       `json:"canJoin"`
 	JoinReason string     `json:"joinReason"`
 	JoinAction JoinAction `json:"joinAction"`
+
+	CanLeave    bool        `json:"canLeave"`
+	LeaveReason string      `json:"leaveReason"`
+	LeaveAction LeaveAction `json:"leaveAction"`
 
 	CanReady    bool   `json:"canReady"`
 	ReadyReason string `json:"readyReason"`
@@ -87,6 +100,7 @@ type UserInfo struct {
 }
 
 type RaceInfo struct {
+	UserID               string
 	Version              int
 	Goal                 string
 	Game                 string
@@ -793,6 +807,8 @@ func (a *App) HandleRaceData(data []byte) {
 
 	log.Info("[RACE] %+v\n", msg)
 
+	a.CurrentRace.UserID = a.User.ID
+
 	race := msg.Race
 
 	log.Info(
@@ -902,22 +918,37 @@ func (a *App) Ready(state bool) {
 	}
 }
 
-// true for join; false for leave
-func (a *App) RequestInvite() {
-	log.Info("Requesting Invite!")
-	// a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
-	a.SendText(".request_invite", a.generateGUID())
-}
-
-// true for join; false for leave
-func (a *App) Join(state bool) {
-	log.Info("Join status changed!")
+// true for request; false for cancel
+func (a *App) RequestInvite(state bool) {
+	log.Info("Invite status changed!")
 	if state {
 		a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
-		a.SendText(".join", a.generateGUID())
+		a.SendText(".requestinvite", a.generateGUID())
 	} else {
 		a.engine.CLEAR_RUNTIME_OFFSET()
-		a.SendText(".leave", a.generateGUID())
+		a.SendText(".cancelinvite", a.generateGUID())
+	}
+}
+
+func (a *App) Leave() {
+	log.Info("Leaving race")
+	a.engine.CLEAR_RUNTIME_OFFSET()
+	a.SendText(".leave", a.generateGUID())
+}
+
+func (a *App) DeclineInvite() {
+	log.Info("Declining invite")
+	a.engine.CLEAR_RUNTIME_OFFSET()
+	a.SendText(".declineinvite", a.generateGUID())
+}
+
+func (a *App) Join() {
+	log.Info("Join status changed!")
+	a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
+	if a.CurrentRace.Status == "invitational" {
+		a.SendText(".acceptinvite", a.generateGUID())
+	} else {
+		a.SendText(".join", a.generateGUID())
 	}
 }
 
@@ -1263,34 +1294,41 @@ func (a *App) getUserInfo() {
 func (a *App) updateRaceActions() {
 	actions := RaceActions{}
 
-	actions.JoinAction = JoinActionJoin
-
 	raceLocked :=
 		a.CurrentRace.Status == "in_progress" ||
 			a.CurrentRace.EndedAt != nil ||
 			a.CurrentRace.CancelledAt != nil
 
-	joined := false
+	status := "not_joined"
 	live := false
 	override := false
 
-	var myEntrant *Entrant
-
-	for _, e := range a.CurrentRace.Entrants {
+	for i := range a.CurrentRace.Entrants {
+		e := &a.CurrentRace.Entrants[i]
 		if e.User.Id == a.User.ID {
-			myEntrant = &e
-			joined = e.Status.Value != "not_joined"
+			status = e.Status.Value
 			live = e.StreamLive
 			override = e.StreamOverride
 			break
 		}
 	}
 
+	joined :=
+		status == "ready" ||
+			status == "not_ready" ||
+			status == "in_progress" ||
+			status == "done" ||
+			status == "dnf" ||
+			status == "dq"
+
 	hasTwitch := strings.TrimSpace(a.User.TwitchName) != ""
 
 	//
 	// JOIN
 	//
+
+	actions.JoinAction = JoinActionJoin
+	actions.LeaveAction = LeaveActionLeave
 
 	switch {
 	case raceLocked:
@@ -1299,24 +1337,42 @@ func (a *App) updateRaceActions() {
 	case !a.canJoin:
 		actions.JoinReason = "Not eligible"
 
-	case a.CurrentRace.Status == "invitational":
-		actions.JoinAction = JoinActionRequest
-
-		if myEntrant != nil &&
-			myEntrant.Status.Value == "invited" {
-			actions.JoinAction = JoinActionJoin
-		} else {
-			actions.CanJoin = true
-			break
-		}
-
-		fallthrough
-
 	case a.CurrentRace.StreamingRequired && !hasTwitch:
 		actions.JoinReason = "Link Twitch account"
 
+	case a.CurrentRace.Status == "invitational":
+		switch status {
+		case "invited":
+			actions.CanJoin = true
+			actions.JoinAction = JoinActionAcceptInvite
+
+			actions.CanLeave = true
+			actions.LeaveAction = LeaveActionDeclineInvite
+
+		case "requested":
+			actions.CanLeave = true
+			actions.LeaveAction = LeaveActionCancelInvite
+
+		default:
+			if !joined {
+				actions.CanJoin = true
+				actions.JoinAction = JoinActionRequestInvite
+			}
+
+			if joined {
+				actions.CanLeave = true
+				actions.LeaveAction = LeaveActionLeave
+			}
+		}
+
 	default:
-		actions.CanJoin = true
+		if joined {
+			actions.CanLeave = true
+			actions.LeaveAction = LeaveActionLeave
+		} else {
+			actions.CanJoin = true
+			actions.JoinAction = JoinActionJoin
+		}
 	}
 
 	//
