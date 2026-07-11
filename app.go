@@ -828,7 +828,7 @@ func (a *App) HandleRaceData(data []byte) {
 		if err != nil {
 			log.Error("failed to parse start_delay:", err)
 		} else {
-			delay = dur.ToDuration()
+			delay = -dur.ToDuration()
 		}
 	}
 	a.CurrentRace.Delay = delay.Milliseconds()

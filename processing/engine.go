@@ -68,7 +68,7 @@ func NewEngine() (*Engine, chan bool, error) {
 		return nil, nil, err
 	}
 
-	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:6767")
+	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:6768")
 	if err != nil {
 		log.Error("failed to resolve OpenSplit address: %v", err)
 		return nil, nil, err
@@ -260,9 +260,7 @@ func (e *Engine) SET_RUNTIME_OFFSET(delay int64) bool {
 }
 
 func (e *Engine) CLEAR_RUNTIME_OFFSET() bool {
-	payload := int64(0)
-
-	packet := buildRCPacket(CLEAR_RUNTIME_OFFSET, &payload, false)
+	packet := buildRCPacket(CLEAR_RUNTIME_OFFSET, nil, false)
 
 	log.Debug("sending command=%s", commandName(CLEAR_RUNTIME_OFFSET))
 
