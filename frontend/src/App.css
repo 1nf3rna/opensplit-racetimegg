@@ -294,22 +294,6 @@
   flex-direction: column;
   gap: 1px;
 }
-/* .chatBox {
-    flex: 1;
-    width: 100%;
-    min-height: 150px;
-
-    max-width: 900px;
-    margin: 0 auto;
-
-    overflow-y: auto;
-    overflow-x: hidden;
-
-    border: 1px solid #ccc;
-    padding: 8px;
-    white-space: pre-wrap;
-    box-sizing: border-box;
-} */
 
 .chatTimestamp {
   opacity: 0.7;
