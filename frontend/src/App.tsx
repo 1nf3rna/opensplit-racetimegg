@@ -142,7 +142,6 @@ function App() {
   const [race, setJoinedRace] = useState<string>("");
   const [textEntry, setTextEntry] = useState<string>("");
   const [hideResults, setHideResults] = useState(false);
-  // const [joinVisible, setJoinVisible] = useState<boolean>(true);
   const [readyVisible, setReadyVisible] = useState<boolean>(true);
   const [doneVisible, setDoneVisible] = useState<boolean>(true);
   const [forfeitVisible, setForfeitVisible] = useState<boolean>(true);
@@ -226,9 +225,40 @@ function App() {
   });
 
   useEffect(() => {
-    log.info("subscribing to race action updates");
+    log.info("subscribing to update events");
 
-    const unsubscribe = EventsOn(
+    const newChatText = EventsOn("chatUpdated", (chatText: ChatMessage[]) => {
+      log.debug(`chat updated messages=${chatText.length}`);
+
+      const shouldAutoScroll = isAtBottom();
+
+      setRaceInfo((prev) => {
+        if (!prev) return prev;
+
+        return { ...prev, Text: chatText };
+      });
+
+      wasAtBottomRef.current = shouldAutoScroll;
+    });
+    const newRaceState = EventsOn(
+      "raceStateUpdated",
+      (currentRace: RaceInfo) => {
+        log.info(
+          `race updated goal=${currentRace.Goal} entrants=${currentRace.EntrantCount}`,
+        );
+
+        setRaceInfo(currentRace);
+      },
+    );
+    const newEntrants = EventsOn(
+      "entrantsUpdated",
+      (entrantList: Entrant[]) => {
+        log.debug(`entrants updated count=${entrantList.length}`);
+
+        setEntrantList(entrantList);
+      },
+    );
+    const newRaceActions = EventsOn(
       "raceActionsUpdated",
       (actions: RaceActions) => {
         log.debug("race actions updated", actions);
@@ -238,8 +268,12 @@ function App() {
     );
 
     return () => {
-      log.debug("unsubscribing from race action updates");
-      unsubscribe();
+      log.debug("unsubscribing from update events");
+
+      newChatText();
+      newRaceState();
+      newEntrants();
+      newRaceActions();
     };
   }, []);
 
@@ -486,68 +520,7 @@ function App() {
         }
       }
     }
-  }, [raceInfo?.StatusVerbose]);
-
-  useEffect(() => {
-    log.info("subscribing to chat update events");
-
-    const newChatText = EventsOn("chatUpdated", (chatText: ChatMessage[]) => {
-      log.debug(`chat updated messages=${chatText.length}`);
-
-      const shouldAutoScroll = isAtBottom();
-
-      setRaceInfo((prev) => {
-        if (!prev) return prev;
-
-        return { ...prev, Text: chatText };
-      });
-
-      wasAtBottomRef.current = shouldAutoScroll;
-    });
-
-    return () => {
-      log.debug("unsubscribing from chat update events");
-      newChatText();
-    };
-  }, []);
-
-  useEffect(() => {
-    log.info("subscribing to race state events");
-
-    const newRaceState = EventsOn(
-      "raceStateUpdated",
-      (currentRace: RaceInfo) => {
-        log.info(
-          `race updated goal=${currentRace.Goal} entrants=${currentRace.EntrantCount}`,
-        );
-
-        setRaceInfo(currentRace);
-      },
-    );
-
-    return () => {
-      log.debug("unsubscribing from race state events");
-      newRaceState();
-    };
-  }, []);
-
-  useEffect(() => {
-    log.info("subscribing to entrant update events");
-
-    const newEntrants = EventsOn(
-      "entrantsUpdated",
-      (entrantList: Entrant[]) => {
-        log.debug(`entrants updated count=${entrantList.length}`);
-
-        setEntrantList(entrantList);
-      },
-    );
-
-    return () => {
-      log.debug("unsubscribing from entrant update events");
-      newEntrants();
-    };
-  }, []);
+  }, [raceInfo, raceStarted, userStatus]);
 
   useEffect(() => {
     log.debug("syncing entrant list into race info");
