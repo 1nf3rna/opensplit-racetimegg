@@ -1,4 +1,4 @@
-import { Authorize, GenTokens } from "../../wailsjs/go/main/App";
+import { Authorize, GenTokens } from "../../wailsjs/go/app/App";
 import { ButtonData } from "./ButtonList";
 import { moduleLogger } from "./logger";
 

@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
-
-import * as racetime from "../../../wailsjs/go/main/App";
-
+import { CheckTokens } from "../../../wailsjs/go/app/App";
 import { ButtonData } from "../ButtonList";
-import { RaceList } from "../racetimeGG";
-
 import { moduleLogger } from "../logger";
+import { RaceList } from "../racetimeGG";
 
 const log = moduleLogger("RACE_POLLING");
 
@@ -18,7 +15,7 @@ export function useRacePolling(activeRace: string) {
     log.info("checking stored auth token");
 
     (async () => {
-      const raceToken = await racetime.CheckTokens();
+      const raceToken = await CheckTokens();
 
       setToken(raceToken);
 
@@ -59,7 +56,7 @@ export function useRacePolling(activeRace: string) {
   }, [token, activeRace]);
 
   const refreshToken = async () => {
-    const raceToken = await racetime.CheckTokens();
+    const raceToken = await CheckTokens();
 
     setToken(raceToken);
   };

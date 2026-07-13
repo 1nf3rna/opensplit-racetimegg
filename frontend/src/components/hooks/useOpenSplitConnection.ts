@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { EventsOn } from "../../../wailsjs/runtime";
-
 import { ConnectionState, ConnectionStatus } from "../../types/racetime";
-
 import { moduleLogger } from "../logger";
 
 const log = moduleLogger("OPENSPLIT_CONNECTION");

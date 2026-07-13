@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 import { EventsOn } from "../../../wailsjs/runtime";
-
 import {
   ChatMessage,
   Entrant,
   RaceActions,
   RaceInfo,
 } from "../../types/racetime";
-
 import { moduleLogger } from "../logger";
 
 const log = moduleLogger("RACE_EVENTS");

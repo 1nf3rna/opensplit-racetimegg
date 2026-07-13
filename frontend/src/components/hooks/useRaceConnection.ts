@@ -1,6 +1,5 @@
-import * as racetime from "../../../wailsjs/go/main/App";
+import { ConnectRace, DisconnectRace } from "../../../wailsjs/go/app/App";
 import { LogError, LogInfo } from "../../../wailsjs/runtime";
-
 import { moduleLogger } from "../logger";
 
 const log = moduleLogger("RACE_CONNECTION");
@@ -17,9 +16,11 @@ export function useRaceConnection({ setRace, resetRaceState }: Props) {
 
       setRace(url);
 
-      await racetime.WebSocketConnection(url);
-
-      LogInfo(`websocket connected race=${url}`);
+      try {
+        await ConnectRace(url);
+      } catch (err) {
+        setRace("");
+      }
     } catch (err) {
       LogError(`failed to connect websocket: ${err}`);
 
@@ -30,7 +31,7 @@ export function useRaceConnection({ setRace, resetRaceState }: Props) {
   const handleBack = async () => {
     log.info("disconnecting from race");
 
-    await racetime.DisconnectRace();
+    await DisconnectRace();
 
     setRace("");
 

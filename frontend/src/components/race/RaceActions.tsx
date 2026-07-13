@@ -1,4 +1,4 @@
-import * as racetime from "../../../wailsjs/go/main/App";
+import { SaveLog } from "../../../wailsjs/go/app/App";
 import { RaceActions as RaceActionsType } from "../../types/racetime";
 
 type Props = {
@@ -47,7 +47,7 @@ export default function RaceActions({
   onForfeit,
 }: Props) {
   const handleSaveLog = async () => {
-    await racetime.SaveLog();
+    await SaveLog();
   };
   return (
     <div className="actionPanel">

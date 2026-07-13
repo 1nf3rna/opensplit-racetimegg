@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-
 import { RaceInfo, UserStatus } from "../../types/racetime";
-
 import { moduleLogger } from "../logger";
 
 const log = moduleLogger("RACE_STATE");
@@ -33,11 +31,8 @@ export function useRaceState({ raceInfo }: Props) {
     userStatus === "dq";
 
   const showJoin = !raceLocked;
-
   const showReady = joined && !raceLocked;
-
   const showDone = joined && raceStarted;
-
   const showForfeit = joined && raceStarted;
 
   useEffect(() => {

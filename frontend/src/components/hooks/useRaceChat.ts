@@ -1,6 +1,5 @@
 import { useState } from "react";
-
-import * as racetime from "../../../wailsjs/go/main/App";
+import { SendText } from "../../../wailsjs/go/app/App";
 import { moduleLogger } from "../logger";
 
 const log = moduleLogger("RACE_CHAT");
@@ -17,7 +16,7 @@ export function useRaceChat() {
     const id = crypto.randomUUID();
 
     try {
-      await racetime.SendText(textEntry, id);
+      await SendText(textEntry, id);
 
       log.debug(`chat message sent id=${id}`);
 

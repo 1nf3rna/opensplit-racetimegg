@@ -1,5 +1,12 @@
-import * as racetime from "../../../wailsjs/go/main/App";
-
+import {
+  DeclineInvite,
+  Done,
+  Forfeit,
+  Join,
+  Leave,
+  Ready,
+  RequestInvite,
+} from "../../../wailsjs/go/app/App";
 import { RaceActions, UserStatus } from "../../types/racetime";
 import { moduleLogger } from "../logger";
 
@@ -38,11 +45,11 @@ export function useRaceActions({
     switch (actions.joinAction) {
       case "join":
       case "accept_invite":
-        await racetime.Join();
+        await Join();
         break;
 
       case "request_invite":
-        await racetime.RequestInvite(true);
+        await RequestInvite(true);
         break;
     }
   };
@@ -52,15 +59,15 @@ export function useRaceActions({
 
     switch (actions.leaveAction) {
       case "leave":
-        await racetime.Leave();
+        await Leave();
         break;
 
       case "decline_invite":
-        await racetime.DeclineInvite();
+        await DeclineInvite();
         break;
 
       case "cancel_invite":
-        await racetime.RequestInvite(false);
+        await RequestInvite(false);
         break;
     }
   };
@@ -68,7 +75,7 @@ export function useRaceActions({
   const handleReady = async () => {
     log.info(`ready clicked visible=${readyVisible}`);
 
-    await racetime.Ready(readyVisible);
+    await Ready(readyVisible);
 
     if (readyVisible) {
       setUserStatus("ready");
@@ -82,7 +89,7 @@ export function useRaceActions({
   const handleDone = async () => {
     log.info(`done clicked visible=${doneVisible}`);
 
-    await racetime.Done(doneVisible);
+    await Done(doneVisible);
 
     if (doneVisible) {
       setUserStatus("done");
@@ -96,7 +103,7 @@ export function useRaceActions({
   const handleForfeit = async () => {
     log.info(`forfeit clicked visible=${forfeitVisible}`);
 
-    await racetime.Forfeit(forfeitVisible);
+    await Forfeit(forfeitVisible);
 
     if (forfeitVisible) {
       setUserStatus("dnf");

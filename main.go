@@ -2,8 +2,10 @@ package main
 
 import (
 	"embed"
+	"log"
+
+	"opensplit-racetimegg/app"
 	"opensplit-racetimegg/logger"
-	"opensplit-racetimegg/securestore"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -18,20 +20,11 @@ var mainLog = logger.Module("main")
 func main() {
 	logger.Init()
 
-	// Create an instance of the app structure
-	app, err := NewApp()
+	client, err := app.New()
 	if err != nil {
-		log.Fatal("failed to initialize app: %v", err)
+		log.Fatalf("failed to initialize app: %v", err)
 	}
 
-	// TODO: switch to environment variable
-	// app.encryptionKey = securestore.KeyFromEnv(os.Getenv("RACETIME_KEY"))
-	app.encryptionKey = securestore.KeyFromEnv("TEST_KEY")
-
-	// TODO: handle error
-	app.Token, _ = securestore.LoadToken("token.enc", app.encryptionKey)
-
-	// Create application with options
 	runErr := wails.Run(&options.App{
 		Title:     "opensplit-racetimegg",
 		Width:     1024,
@@ -47,9 +40,9 @@ func main() {
 			B: 54,
 			A: 1,
 		},
-		OnStartup: app.startup,
-		Bind: []interface{}{
-			app,
+		OnStartup: client.Startup,
+		Bind: []any{
+			client,
 		},
 	})
 
