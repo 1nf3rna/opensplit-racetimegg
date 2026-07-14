@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+
 import { RaceInfo, UserStatus } from "../../types/racetime";
 import { moduleLogger } from "../logger";
 

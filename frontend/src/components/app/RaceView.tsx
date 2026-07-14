@@ -1,14 +1,13 @@
-import ChatPanel from "../chat/ChatPanel";
-import EntrantList from "../race/EntrantList";
-import RaceActions from "../race/RaceActions";
-import ConnectionStatus from "./ConnectionStatus";
-
 import {
   ConnectionState,
   Entrant,
   RaceActions as RaceActionsType,
   RaceInfo,
 } from "../../types/racetime";
+import ChatPanel from "../chat/ChatPanel";
+import EntrantList from "../race/EntrantList";
+import RaceActions from "../race/RaceActions";
+import ConnectionStatus from "./ConnectionStatus";
 
 type Props = {
   race: string;

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+
 import { WindowSetSize } from "../../../wailsjs/runtime";
 
 export function useWindowLayout(race: string) {

@@ -1,5 +1,7 @@
-import { useState } from "react";
 import "./App.css";
+
+import { useState } from "react";
+
 import AuthView from "./components/app/AuthView";
 import RaceSelector from "./components/app/RaceSelector";
 import RaceView from "./components/app/RaceView";

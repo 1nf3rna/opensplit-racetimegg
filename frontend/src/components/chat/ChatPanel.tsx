@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+
 import { ChatMessage } from "../../types/racetime";
 
 type Props = {
