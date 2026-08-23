@@ -103,7 +103,7 @@ export default function RaceActions({
       )}
 
       <button disabled={!actions.canDone} hidden={!showDone} onClick={onDone}>
-        {!doneVisible ? "Done" : "Undone"}
+        {doneVisible ? "Done" : "Undone"}
       </button>
 
       {!actions.canDone && showDone && actions.doneReason && (
@@ -115,7 +115,7 @@ export default function RaceActions({
         hidden={!showForfeit}
         onClick={onForfeit}
       >
-        {!forfeitVisible ? "Forfeit" : "Unforfeit"}
+        {forfeitVisible ? "Forfeit" : "Unforfeit"}
       </button>
 
       {!actions.canForfeit && showForfeit && actions.forfeitReason && (
