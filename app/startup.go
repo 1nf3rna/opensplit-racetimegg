@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"opensplit-racetimegg/processing"
+	"opensplit-racetimegg/command"
 	"opensplit-racetimegg/racetime"
 
 	"github.com/google/uuid"
@@ -40,12 +40,12 @@ func (a *App) Startup(ctx context.Context) {
 				return
 			}
 
-			switch ev.Command {
-			case processing.DONE:
+			switch ev {
+			case command.DONE:
 				log.Info("opensplit DONE event received")
 				a.sendAction(".done")
 
-			case processing.UNDONE:
+			case command.UNDONE:
 				log.Info("opensplit UNDONE event received")
 				a.sendAction(".undone")
 			}

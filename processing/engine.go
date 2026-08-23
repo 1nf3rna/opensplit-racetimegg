@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"opensplit-racetimegg/command"
 	"opensplit-racetimegg/logger"
 	"sync"
 	"time"
@@ -16,114 +17,9 @@ const (
 	RecordAck     = 0x80
 )
 
-type Command byte
-
-const (
-	QUIT Command = iota
-
-	//
-	// Split files
-	//
-
-	NEW
-	LOAD
-	EDIT
-
-	CANCEL
-	SUBMIT
-
-	CLOSE
-
-	RESET
-	SAVE
-
-	//
-	// Timer
-	//
-
-	SPLIT
-	UNDO
-	SKIP
-
-	PAUSE
-
-	//
-	// Configuration
-	//
-
-	TOGGLEGLOBAL
-	SETLAYOUT
-	TOGGLEWR
-
-	FOCUS
-
-	//
-	// Internal
-	//
-
-	HELLO
-
-	DONE
-	UNDONE
-
-	//
-	// Runtime offset
-	//
-
-	SET_RUNTIME_OFFSET
-	CLEAR_RUNTIME_OFFSET
-
-	//
-	// Display control
-	//
-
-	COMPARISON_LEFT
-	COMPARISON_RIGHT
-
-	//
-	// Skin management
-	//
-
-	NEW_SKIN
-	EDIT_SKIN
-
-	SKIN_SELECT
-
-	//
-	// Skin editor navigation
-	//
-
-	SKIN_FILE
-	SKIN_ELEMENT
-	SKIN_RULE
-
-	CLEAR_ELEMENT
-
-	//
-	// Skin editor working copy mutations
-	//
-
-	SKIN_CREATE_FILE
-	SKIN_CREATE_RULE
-
-	SKIN_RULE_UPDATE
-	SKIN_FILE_UPDATE
-
-	SKIN_RULE_DELETE
-
-	SKIN_PREVIEW_SET
-
-	//
-	// Skin editor persistence
-	//
-
-	SKIN_SAVE
-	SKIN_RELOAD
-)
-
-type Event struct {
-	Command Command
-}
+// type Event struct {
+// 	Command Command
+// }
 
 type Engine struct {
 	m                    sync.Mutex
@@ -131,7 +27,7 @@ type Engine struct {
 	osAddr               *net.UDPAddr
 	openSplitConnected   bool
 	opensplitConnectedCh chan bool
-	events               chan Event
+	events               chan command.Command
 	lastHelloAck         time.Time
 	done                 chan struct{}
 }
@@ -156,7 +52,7 @@ func NewEngine() (*Engine, chan bool, error) {
 		conn:                 conn,
 		osAddr:               addr,
 		opensplitConnectedCh: make(chan bool),
-		events:               make(chan Event, 32),
+		events:               make(chan command.Command, 32),
 		done:                 make(chan struct{}),
 	}
 
@@ -251,30 +147,30 @@ func (e *Engine) readLoop() {
 			}
 
 		case RecordCommand:
-			cmd := Command(buf[6])
+			cmd := command.Command(buf[6])
 
 			log.Debug("received command=%s", commandName(cmd))
 
 			switch cmd {
-			case HELLO:
+			case command.HELLO:
 				e.m.Lock()
 				e.lastHelloAck = time.Now()
 				e.m.Unlock()
 
 				log.Debug("received HELLO ACK")
 
-			case DONE:
+			case command.DONE:
 				log.Debug("queueing DONE event")
 				select {
-				case e.events <- Event{Command: DONE}:
+				case e.events <- command.DONE:
 				default:
 					log.Warn("event queue full, dropping DONE event")
 				}
 
-			case UNDONE:
+			case command.UNDONE:
 				log.Debug("queueing UNDONE event")
 				select {
-				case e.events <- Event{Command: UNDONE}:
+				case e.events <- command.UNDONE:
 				default:
 					log.Warn("event queue full, dropping UNDONE event")
 				}
@@ -307,7 +203,7 @@ func (e *Engine) Close() {
 	log.Info("engine closed")
 }
 
-func (e *Engine) Events() <-chan Event {
+func (e *Engine) Events() <-chan command.Command {
 	return e.events
 }
 
@@ -316,11 +212,11 @@ func (e *Engine) OpenSplitConnected() bool {
 }
 
 func (e *Engine) SET_RUNTIME_OFFSET(delay int64) bool {
-	packet := buildRCPacket(SET_RUNTIME_OFFSET, &delay, false)
+	packet := buildRCPacket(command.SET_RUNTIME_OFFSET, &delay, false)
 
 	log.Debug(
 		"sending command=%s delay=%d",
-		commandName(SET_RUNTIME_OFFSET),
+		commandName(command.SET_RUNTIME_OFFSET),
 		delay,
 	)
 
@@ -337,9 +233,9 @@ func (e *Engine) SET_RUNTIME_OFFSET(delay int64) bool {
 }
 
 func (e *Engine) CLEAR_RUNTIME_OFFSET() bool {
-	packet := buildRCPacket(CLEAR_RUNTIME_OFFSET, nil, false)
+	packet := buildRCPacket(command.CLEAR_RUNTIME_OFFSET, nil, false)
 
-	log.Debug("sending command=%s", commandName(CLEAR_RUNTIME_OFFSET))
+	log.Debug("sending command=%s", commandName(command.CLEAR_RUNTIME_OFFSET))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -354,9 +250,9 @@ func (e *Engine) CLEAR_RUNTIME_OFFSET() bool {
 }
 
 func (e *Engine) UnDone() bool {
-	packet := buildRCPacket(UNDONE, nil, false)
+	packet := buildRCPacket(command.UNDONE, nil, false)
 
-	log.Debug("sending command=%s", commandName(UNDONE))
+	log.Debug("sending command=%s", commandName(command.UNDONE))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -371,9 +267,9 @@ func (e *Engine) UnDone() bool {
 }
 
 func (e *Engine) Done() bool {
-	packet := buildRCPacket(DONE, nil, false)
+	packet := buildRCPacket(command.DONE, nil, false)
 
-	log.Debug("sending command=%s", commandName(DONE))
+	log.Debug("sending command=%s", commandName(command.DONE))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -388,9 +284,9 @@ func (e *Engine) Done() bool {
 }
 
 func (e *Engine) Split() bool {
-	packet := buildRCPacket(SPLIT, nil, false)
+	packet := buildRCPacket(command.SPLIT, nil, false)
 
-	log.Debug("sending command=%s", commandName(SPLIT))
+	log.Debug("sending command=%s", commandName(command.SPLIT))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -405,9 +301,9 @@ func (e *Engine) Split() bool {
 }
 
 func (e *Engine) Hello() bool {
-	packet := buildRCPacket(HELLO, nil, true)
+	packet := buildRCPacket(command.HELLO, nil, true)
 
-	log.Debug("sending command=%s", commandName(HELLO))
+	log.Debug("sending command=%s", commandName(command.HELLO))
 
 	e.m.Lock()
 	defer e.m.Unlock()
@@ -421,7 +317,7 @@ func (e *Engine) Hello() bool {
 	return true
 }
 
-func buildRCPacket(command Command, payload *int64, requestAck bool) []byte {
+func buildRCPacket(command command.Command, payload *int64, requestAck bool) []byte {
 	packetSize := 7
 
 	if payload != nil {
@@ -479,19 +375,19 @@ func (e *Engine) updateConnectionStatus(status bool) {
 	}
 }
 
-func commandName(cmd Command) string {
+func commandName(cmd command.Command) string {
 	switch cmd {
-	case HELLO:
+	case command.HELLO:
 		return "HELLO"
-	case DONE:
+	case command.DONE:
 		return "DONE"
-	case UNDONE:
+	case command.UNDONE:
 		return "UNDONE"
-	case SPLIT:
+	case command.SPLIT:
 		return "SPLIT"
-	case SET_RUNTIME_OFFSET:
+	case command.SET_RUNTIME_OFFSET:
 		return "SET_RUNTIME_OFFSET"
-	case CLEAR_RUNTIME_OFFSET:
+	case command.CLEAR_RUNTIME_OFFSET:
 		return "CLEAR_RUNTIME_OFFSET"
 	default:
 		return fmt.Sprintf("UNKNOWN(%d)", cmd)
