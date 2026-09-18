@@ -72,7 +72,7 @@ func (a *App) HandleRaceData(data []byte) {
 
 	a.CurrentRace.Entrants = race.Entrants
 
-	if previousStatus != "in_progress" && a.CurrentRace.Status == "in_progress" {
+	if previousStatus != "pending" && a.CurrentRace.Status == "pending" {
 		log.Info("race transitioned to in_progress")
 
 		if a.engine != nil {
