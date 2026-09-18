@@ -6,3 +6,7 @@ handle bot_meta race data
 chat needs pretty display
 
 css to make frontend pretty
+
+done in timer doesn't finish in RTGG
+done/forfeit RTGG zeros timer
+reconnect to running race needs to set and start timer
