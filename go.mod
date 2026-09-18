@@ -2,7 +2,7 @@ module opensplit-racetimegg
 
 go 1.25.0
 
-require github.com/wailsapp/wails/v2 v2.15.0
+require github.com/wailsapp/wails/v2 v2.16.0
 
 require github.com/coder/websocket v1.8.14
 
