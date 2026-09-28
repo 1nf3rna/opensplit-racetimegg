@@ -14,32 +14,91 @@ func (a *App) Ready(state bool) {
 // true for done; false for undone
 func (a *App) Done(state bool) {
 	log.Info("Done status changed!")
-	a.engine.CLEAR_RUNTIME_OFFSET()
 	if state {
 		a.engine.Done()
-		a.sendAction(".done")
 	} else {
 		a.engine.UnDone()
+	}
+	a.setRuntimeOffsetHeld("done", state)
+	if state {
+		a.sendAction(".done")
+	} else {
 		a.sendAction(".undone")
 	}
+}
+
+// OpenSplitDone is called when OpenSplit completes its final split.
+func (a *App) OpenSplitDone() {
+	a.setRuntimeOffsetHeld("done", true)
+	a.sendAction(".done")
+}
+
+// OpenSplitUndone is called when OpenSplit undoes its final split.
+func (a *App) OpenSplitUndone() {
+	a.setRuntimeOffsetHeld("done", false)
+	a.sendAction(".undone")
+}
+
+// OpenSplitForfeit is called when OpenSplit resets the active run.
+func (a *App) OpenSplitForfeit() {
+	a.setRuntimeOffsetHeld("forfeit", true)
+	a.sendAction(".forfeit")
 }
 
 // true for forfeit; false for unforfeit
 func (a *App) Forfeit(state bool) {
 	log.Info("Forfeit status changed!")
-	// if forfeited unforfeit otherwise forfeit
-	a.engine.CLEAR_RUNTIME_OFFSET()
+	a.setRuntimeOffsetHeld("forfeit", state)
+	a.engine.SetForfeitPaused(state)
 	if state {
-		a.engine.Done()
 		a.sendAction(".forfeit")
 	} else {
-		a.engine.UnDone()
 		a.sendAction(".unforfeit")
+	}
+}
+
+func (a *App) setRuntimeOffsetHeld(reason string, held bool) {
+	a.timerActionMu.Lock()
+	defer a.timerActionMu.Unlock()
+
+	wasHeld := a.doneHeld || a.forfeitHeld
+	switch reason {
+	case "done":
+		a.doneHeld = held
+	case "forfeit":
+		a.forfeitHeld = held
+	}
+	isHeld := a.doneHeld || a.forfeitHeld
+	if wasHeld == isHeld {
+		return
+	}
+
+	if isHeld {
+		a.engine.CLEAR_RUNTIME_OFFSET()
+		return
+	}
+
+	a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
+}
+
+func (a *App) resetRaceTimerStatus() {
+	a.timerActionMu.Lock()
+	doneHeld := a.doneHeld
+	forfeitHeld := a.forfeitHeld
+	a.doneHeld = false
+	a.forfeitHeld = false
+	a.timerActionMu.Unlock()
+	if doneHeld {
+		a.engine.UnDone()
+	}
+	if forfeitHeld {
+		a.engine.SetForfeitPaused(false)
 	}
 }
 
 func (a *App) Join() {
 	log.Info("Join status changed!")
+	a.resetRaceTimerStatus()
 	a.engine.SET_RUNTIME_OFFSET(a.CurrentRace.Delay)
 	if a.CurrentRace.Status == "invitational" {
 		a.sendAction(".acceptinvite")
@@ -50,6 +109,7 @@ func (a *App) Join() {
 
 func (a *App) Leave() {
 	log.Info("Leaving race")
+	a.resetRaceTimerStatus()
 	a.engine.CLEAR_RUNTIME_OFFSET()
 	a.sendAction(".leave")
 }

@@ -174,6 +174,14 @@ func (e *Engine) readLoop() {
 				default:
 					log.Warn("event queue full, dropping UNDONE event")
 				}
+
+			case command.PAUSE:
+				log.Debug("queueing PAUSE event")
+				select {
+				case e.events <- command.PAUSE:
+				default:
+					log.Warn("event queue full, dropping PAUSE event")
+				}
 			}
 		default:
 			log.Warn("unknown record type=%d", buf[5])
@@ -246,6 +254,31 @@ func (e *Engine) CLEAR_RUNTIME_OFFSET() bool {
 		return false
 	}
 
+	return true
+}
+
+func (e *Engine) SetForfeitPaused(paused bool) bool {
+	state := int64(0)
+	if paused {
+		state = 1
+	}
+	return e.send(
+		buildRCPacket(command.PAUSE, &state, false),
+		fmt.Sprintf("PAUSE (forfeit=%t)", paused),
+	)
+}
+
+func (e *Engine) send(packet []byte, name string) bool {
+	log.Debug("sending command=%s", name)
+	e.m.Lock()
+	defer e.m.Unlock()
+	if e.conn == nil {
+		return false
+	}
+	if _, err := e.conn.WriteTo(packet, e.osAddr); err != nil {
+		log.Error("WriteTo failed: %v", err)
+		return false
+	}
 	return true
 }
 
@@ -389,6 +422,8 @@ func commandName(cmd command.Command) string {
 		return "SET_RUNTIME_OFFSET"
 	case command.CLEAR_RUNTIME_OFFSET:
 		return "CLEAR_RUNTIME_OFFSET"
+	case command.PAUSE:
+		return "PAUSE"
 	default:
 		return fmt.Sprintf("UNKNOWN(%d)", cmd)
 	}

@@ -6,6 +6,7 @@ import (
 	"opensplit-racetimegg/processing"
 	"opensplit-racetimegg/racetime"
 	"opensplit-racetimegg/securestore"
+	"sync"
 
 	"golang.org/x/oauth2"
 )
@@ -32,6 +33,9 @@ type App struct {
 	engine         *processing.Engine
 	osConnectionCh chan bool
 	canJoin        bool
+	timerActionMu  sync.Mutex
+	doneHeld       bool
+	forfeitHeld    bool
 }
 
 func New() (*App, error) {

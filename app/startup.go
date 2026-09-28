@@ -43,11 +43,15 @@ func (a *App) Startup(ctx context.Context) {
 			switch ev {
 			case command.DONE:
 				log.Info("opensplit DONE event received")
-				a.sendAction(".done")
+				a.OpenSplitDone()
 
 			case command.UNDONE:
 				log.Info("opensplit UNDONE event received")
-				a.sendAction(".undone")
+				a.OpenSplitUndone()
+
+			case command.PAUSE:
+				log.Info("opensplit reset event received; forfeiting race")
+				a.OpenSplitForfeit()
 			}
 		}
 	}()
