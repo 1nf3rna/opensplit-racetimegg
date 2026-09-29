@@ -1,6 +1,6 @@
 import "./App.css";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import AuthView from "./components/app/AuthView";
 import RaceSelector from "./components/app/RaceSelector";
@@ -37,6 +37,7 @@ function App() {
   const { token, raceList, refreshToken } = useRacePolling(race);
 
   const {
+    userStatus,
     setUserStatus,
 
     showJoin,
@@ -46,6 +47,11 @@ function App() {
   } = useRaceState({
     raceInfo,
   });
+
+  useEffect(() => {
+    setDoneVisible(userStatus !== "done");
+    setForfeitVisible(userStatus !== "dnf");
+  }, [userStatus]);
 
   const { handleJoin, handleLeave, handleReady, handleDone, handleForfeit } =
     useRaceActions({
