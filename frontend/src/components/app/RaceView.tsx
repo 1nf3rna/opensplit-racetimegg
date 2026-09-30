@@ -81,6 +81,20 @@ export default function RaceView({
   setTextEntry,
   onSend,
 }: Props) {
+  const renderInfo = (info?: string) => {
+    if (!info) return info;
+
+    return info.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
+      /^https?:\/\//.test(part) ? (
+        <a key={index} href={part} target="_blank" rel="noopener noreferrer">
+          {part}
+        </a>
+      ) : (
+        part
+      ),
+    );
+  };
+
   return (
     <div id="RaceWindow">
       <div className="raceHeader" />
@@ -109,7 +123,7 @@ export default function RaceView({
             <div className="raceInfoRow">
               <span className="label">Info:</span>
 
-              <div className="value">{raceInfo?.Info}</div>
+              <div className="value">{renderInfo(raceInfo?.Info)}</div>
             </div>
           </div>
 
