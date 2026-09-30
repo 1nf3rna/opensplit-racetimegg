@@ -3,18 +3,8 @@ disable starting timer from opensplit or factfinder if connected to a race
 handle chat actions
 handle possible chat errors
 handle bot_meta race data
-chat needs pretty display
 
 css to make frontend pretty
 
 reconnect to running race needs to set and start timer from RTGG
-
-RTGG -> OS: offset is not being sent to opensplit after/when joining
-RTGG -> OS: Done didn't stop timer/finish run
-RTGG -> OS: UnDone works, and updates timer
-RTGG -> OS: Forfeit correctly pauses the timer
-RTGG -> OS: UnForfeit correctly unpauses and updates timer
-OS -> RTGG: Finishing worked, but RTGG Done button doesn't change to Undone
-OS -> RTGG: undo split works, and timer updates, but RTGG Undone button doesn't change to Done
-OS -> RTGG: Reset correctly forfeits
-OS -> RTGG: Unforfeit correctly doesn't restart timer
+after reset clicking unforfeit button should restore timer like a reconnect
