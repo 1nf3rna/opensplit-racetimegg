@@ -22,6 +22,7 @@ export default function EntrantList({ entrants, hideResults }: Props) {
             alt="stream"
             width={16}
             height={16}
+            className={entrant.stream_live || entrant.stream_override ? "streamIcon" : "streamIcon streamIconOffline"}
           />
 
           <img src={entrant.user.avatar} width={24} height={24} alt="avatar" />
