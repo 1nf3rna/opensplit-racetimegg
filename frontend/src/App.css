@@ -222,6 +222,13 @@
     font-size: 12px;
 }
 
+.streamIconOffline {
+    box-sizing: content-box;
+    padding: 2px;
+    border-radius: 50%;
+    background-color: #e6e6e6;
+}
+
 .entrantSummary {
     margin-top: 8px;
     font-weight: bold;
@@ -306,6 +313,46 @@
 
 .chatText {
     font-size: 14px;
+}
+
+.chatSender {
+    color: rgb(160, 172, 232);
+}
+
+.chatBotMessage {
+    color: rgb(160, 172, 232);
+}
+
+.chatSystemMessage {
+    color: rgb(160, 233, 160);
+}
+
+.chatUserMessage {
+    color: white;
+}
+
+.chatText .chatSender {
+    color: inherit;
+}
+
+.chatSystemMessage .chatSender {
+    color: rgb(160, 233, 160);
+}
+
+.chatUserActionMessage {
+    color: rgb(140, 137, 140);
+}
+
+.chatGood {
+    color: rgb(160, 233, 160);
+}
+
+.chatBad {
+    color: rgb(240, 128, 128);
+}
+
+.chatBotHighlight {
+    color: rgb(160, 172, 232);
 }
 
 .dmMessage {
