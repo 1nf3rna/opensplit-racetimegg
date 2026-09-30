@@ -106,6 +106,37 @@ export default function ChatPanel({ messages }: Props) {
     });
   };
 
+  const renderMessage = (text?: string | null) => {
+    if (!text) {
+      return text;
+    }
+
+    // RaceTime highlights words with markers such as ##good##finished##.
+    const parts = text.split(/(##(?:good|bad|bot)##.*?##)/g);
+
+    return parts.map((part, index) => {
+      const highlight = part.match(/^##(good|bad|bot)##(.*?)##$/);
+      if (!highlight) {
+        return <span key={index}>{linkify(part)}</span>;
+      }
+
+      return (
+        <span
+          key={index}
+          className={
+            highlight[1] === "good"
+              ? "chatGood"
+              : highlight[1] === "bad"
+                ? "chatBad"
+                : "chatBotHighlight"
+          }
+        >
+          {highlight[2]}
+        </span>
+      );
+    });
+  };
+
   return (
     <div className="chatContainer">
       <div className="chatTabs">
@@ -134,18 +165,34 @@ export default function ChatPanel({ messages }: Props) {
           const senderName = message.is_bot
             ? message.bot || "Bot"
             : (message.user?.name ?? "System");
+          const isUserAction =
+            message.is_system &&
+            /\b(invites? .* to join|joins? the race|accepts? an invitation|is ready!|is no longer done|has .* from the race|has un-forfeited|has .*finished.* in .* place)\b/i.test(
+              message.message,
+            );
+          const messageClass = message.is_bot
+            ? "chatText chatBotMessage"
+            : message.is_system
+              ? isUserAction
+                ? "chatText chatUserActionMessage"
+                : "chatText chatSystemMessage"
+              : "chatText chatUserMessage";
 
           return (
             <div
               key={message.id}
               className={message.is_dm ? "dmMessage" : "mainMessage"}
             >
-              <div className="chatText">
+              <div className={messageClass}>
                 <span className="chatTimestamp">
                   {formatChatTime(message.posted_at)}
                 </span>{" "}
-                <span className="chatSender">{senderName}:</span>{" "}
-                {linkify(message.message)}
+                <span className="chatSender">
+                  {senderName}
+                  {!message.is_system && ":"}
+                </span>
+                {" "}
+                {renderMessage(message.message)}
               </div>
             </div>
           );
