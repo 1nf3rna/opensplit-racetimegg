@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
+import { BrowserOpenURL } from "../../../wailsjs/runtime";
 import { ChatMessage } from "../../types/racetime";
 
 type Props = {
@@ -96,7 +97,14 @@ export default function ChatPanel({ messages }: Props) {
     return text.split(urlRegex).map((part, index) => {
       if (part.match(/^https?:\/\//)) {
         return (
-          <a key={index} href={part} target="_blank" rel="noopener noreferrer">
+          <a
+            key={index}
+            href={part}
+            onClick={(event) => {
+              event.preventDefault();
+              BrowserOpenURL(part);
+            }}
+          >
             {part}
           </a>
         );

@@ -4,6 +4,7 @@ import {
   RaceActions as RaceActionsType,
   RaceInfo,
 } from "../../types/racetime";
+import { BrowserOpenURL } from "../../../wailsjs/runtime";
 import ChatPanel from "../chat/ChatPanel";
 import EntrantList from "../race/EntrantList";
 import RaceActions from "../race/RaceActions";
@@ -86,7 +87,14 @@ export default function RaceView({
 
     return info.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
       /^https?:\/\//.test(part) ? (
-        <a key={index} href={part} target="_blank" rel="noopener noreferrer">
+        <a
+          key={index}
+          href={part}
+          onClick={(event) => {
+            event.preventDefault();
+            BrowserOpenURL(part);
+          }}
+        >
           {part}
         </a>
       ) : (
