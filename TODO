@@ -6,6 +6,5 @@ handle bot_meta race data
 
 css to make frontend pretty
 
-Accept Invite button didn't show up
 reconnect to running race needs to set and start timer from RTGG
 after reset clicking unforfeit button should restore timer like a reconnect
